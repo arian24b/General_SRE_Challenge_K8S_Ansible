@@ -1,0 +1,4 @@
+hcloud_token         = "hetzner api token"
+location             = "fsn1"
+os_image             = "ubuntu-24.04"
+ssh_public_key_path  = "~/.ssh/id_ed25519.pub"
