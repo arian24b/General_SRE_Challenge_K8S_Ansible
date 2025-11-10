@@ -1,5 +1,11 @@
 # Terraform Infrastructure for K8s on Hetzner
 
+## Files
+- `main.tf`: Terraform configuration
+- `variables.tf`: Input variables
+- `outputs.tf`: Output variables
+- `terraform.tfvars.example`: Example variable values
+
 ## Setup
 1. `cp terraform.tfvars.example terraform.tfvars`
 2. `terraform init`
