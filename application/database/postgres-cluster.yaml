@@ -1,0 +1,63 @@
+apiVersion: postgres-operator.crunchydata.com/v1beta1
+kind: PostgresCluster
+metadata:
+  name: postgres-cluster
+  namespace: application
+spec:
+  image: registry.developers.crunchydata.com/crunchydata/crunchy-postgres:ubi9-17.6-2542
+  postgresVersion: 15
+  instances:
+    - name: instance1
+      replicas: 3
+      dataVolumeClaimSpec:
+        accessModes:
+          - "ReadWriteOnce"
+        storageClassName: local-storage
+        resources:
+          requests:
+            storage: 1Gi
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 1
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    postgres-operator.crunchydata.com/cluster: postgres-cluster
+                    postgres-operator.crunchydata.com/instance-set: instance1
+                topologyKey: kubernetes.io/hostname
+  backups:
+    pgbackrest:
+      image: registry.developers.crunchydata.com/crunchydata/crunchy-pgbackrest:ubi9-2.56.0-2542
+      repos:
+        - name: repo1
+          volume:
+            volumeClaimSpec:
+              accessModes:
+                - "ReadWriteOnce"
+              storageClassName: local-storage
+              resources:
+                requests:
+                  storage: 1Gi
+        - name: repo2
+          volume:
+            volumeClaimSpec:
+              accessModes:
+                - "ReadWriteOnce"
+              storageClassName: local-storage
+              resources:
+                requests:
+                  storage: 1Gi
+  proxy:
+    pgBouncer:
+      image: registry.developers.crunchydata.com/crunchydata/crunchy-pgbouncer:ubi9-1.24-2542
+      replicas: 2
+  users:
+    - name: postgres
+      databases:
+        - postgres
+      options: "SUPERUSER"
+    - name: appuser
+      databases:
+        - postgres
+      options: "CREATEDB"
