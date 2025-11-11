@@ -25,6 +25,18 @@ alloy:
         forward_to = [prometheus.remote_write.mimir.receiver]
       }
 
+      prometheus.scrape "api" {
+        targets = discovery.kubernetes.pods "api_pods" {
+          role = "pod"
+          selectors = [
+            { role = "pod", namespace = "application", label = "app=api" }
+          ]
+        }
+        scrape_interval = "15s"
+        metrics_path = "/metrics"
+        forward_to = [prometheus.remote_write.mimir.receiver]
+      }
+
       prometheus.remote_write "mimir" {
         endpoint {
           url = "http://mimir-distributor:8080/api/v1/push"
@@ -70,6 +82,18 @@ alloy:
                 annotations = {
                   summary = "Pod {{ $labels.pod }} failed"
                   description = "Pod has restarted {{ $value }} times"
+                }
+              },
+              {
+                alert = "HighAPIErrorRate"
+                expr = "rate(api_requests_total{status=\"error\"}[5m]) / rate(api_requests_total[5m]) > 0.05"
+                for = "5m"
+                labels = {
+                  severity = "warning"
+                }
+                annotations = {
+                  summary = "High API error rate"
+                  description = "API error rate is {{ $value }}%"
                 }
               }
             ]
