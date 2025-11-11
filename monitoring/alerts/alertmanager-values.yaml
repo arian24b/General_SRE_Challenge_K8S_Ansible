@@ -1,0 +1,32 @@
+config:
+  global:
+    smtp_smarthost: "smtp.gmail.com:587"
+    smtp_from: "alerts@example.com"
+    smtp_auth_username: "email@gmail.com"
+    smtp_auth_password: "password"
+
+  route:
+    group_by: ["alertname"]
+    group_wait: 10s
+    group_interval: 10s
+    repeat_interval: 1h
+    routes:
+      - match:
+          severity: critical
+        receiver: "email-notifications"
+
+  receivers:
+    - name: "email-notifications"
+      email_configs:
+        - to: "admin@example.com"
+          send_resolved: true
+          headers:
+            subject: "{{ .GroupLabels.alertname }} - {{ .Status }}"
+
+service:
+  type: LoadBalancer
+  ports:
+    - name: http
+      port: 9093
+      targetPort: 9093
+      protocol: TCP

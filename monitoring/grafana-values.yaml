@@ -1,0 +1,45 @@
+adminPassword: admin123
+
+datasources:
+  datasources.yaml:
+    apiVersion: 1
+    datasources:
+      - name: Mimir
+        type: prometheus
+        url: http://mimir-query-frontend:8080/prometheus
+        access: proxy
+        isDefault: true
+
+dashboardProviders:
+  dashboardproviders.yaml:
+    apiVersion: 1
+    providers:
+      - name: "default"
+        orgId: 1
+        folder: ""
+        type: file
+        disableDeletion: false
+        updateIntervalSeconds: 10
+        allowUiUpdates: true
+        options:
+          path: /var/lib/grafana/dashboards
+
+dashboards:
+  default:
+    node-exporter:
+      gnetId: 1860
+      revision: 29
+      datasource: Mimir
+    kubelet:
+      gnetId: 13077
+      revision: 1
+      datasource: Mimir
+    cluster-overview:
+      gnetId: 7249
+      revision: 1
+      datasource: Mimir
+
+service:
+  type: LoadBalancer
+  port: 80
+  targetPort: 3000

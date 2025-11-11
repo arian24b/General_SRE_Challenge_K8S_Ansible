@@ -1,0 +1,92 @@
+alloy:
+  configMap:
+    create: true
+    content: |
+      prometheus.scrape "kubelet" {
+        targets = [
+          {"__address__": "10.0.1.10:10250"},
+          {"__address__": "10.0.1.11:10250"},
+          {"__address__": "10.0.1.12:10250"}
+        ]
+        scrape_interval = "15s"
+        scheme = "https"
+        tls_config {
+          insecure_skip_verify = true
+        }
+        bearer_token_file = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+        forward_to = [prometheus.remote_write.mimir.receiver]
+      }
+
+      prometheus.scrape "pods" {
+        targets = discovery.kubernetes.pods "pods" {
+          role = "pod"
+          namespaces = ["default", "kube-system"]
+        }
+        forward_to = [prometheus.remote_write.mimir.receiver]
+      }
+
+      prometheus.remote_write "mimir" {
+        endpoint {
+          url = "http://mimir-distributor:8080/api/v1/push"
+        }
+      }
+
+      prometheus.rules "kubernetes_alerts" {
+        groups = [
+          {
+            name = "kubernetes-alerts"
+            rules = [
+              {
+                alert = "HighCpuUsage"
+                expr = "100 - (avg by(instance) (irate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100) > 80"
+                for = "5m"
+                labels = {
+                  severity = "warning"
+                }
+                annotations = {
+                  summary = "High CPU usage on {{ $labels.instance }}"
+                  description = "CPU usage is {{ $value }}%"
+                }
+              },
+              {
+                alert = "NodeDown"
+                expr = "up{job=\"kubelet\"} == 0"
+                for = "5m"
+                labels = {
+                  severity = "critical"
+                }
+                annotations = {
+                  summary = "Node {{ $labels.instance }} is down"
+                  description = "Node has been down for more than 5 minutes"
+                }
+              },
+              {
+                alert = "PodFailed"
+                expr = "kube_pod_container_status_restarts_total > 5"
+                for = "10m"
+                labels = {
+                  severity = "warning"
+                }
+                annotations = {
+                  summary = "Pod {{ $labels.pod }} failed"
+                  description = "Pod has restarted {{ $value }} times"
+                }
+              }
+            ]
+          }
+        ]
+      }
+
+      prometheus.alertmanager "alertmanager" {
+        endpoint {
+          url = "http://alertmanager:9093"
+        }
+      }
+
+service:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 12345
+      targetPort: 12345
+      protocol: TCP

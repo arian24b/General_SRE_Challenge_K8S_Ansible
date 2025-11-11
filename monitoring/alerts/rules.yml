@@ -1,0 +1,29 @@
+groups:
+  - name: kubernetes-alerts
+    rules:
+      - alert: HighCpuUsage
+        expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage on {{ $labels.instance }}"
+          description: "CPU usage is {{ $value }}%"
+
+      - alert: NodeDown
+        expr: up{job="kubelet"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Node {{ $labels.instance }} is down"
+          description: "Node has been down for more than 5 minutes"
+
+      - alert: PodFailed
+        expr: kube_pod_container_status_restarts_total > 5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Pod {{ $labels.pod }} failed"
+          description: "Pod has restarted {{ $value }} times"
