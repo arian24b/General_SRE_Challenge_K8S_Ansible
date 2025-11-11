@@ -20,7 +20,7 @@ alloy:
       prometheus.scrape "pods" {
         targets = discovery.kubernetes.pods "pods" {
           role = "pod"
-          namespaces = ["default", "kube-system"]
+          namespaces = ["default", "application", "kube-system"]
         }
         forward_to = [prometheus.remote_write.mimir.receiver]
       }

@@ -1,4 +1,4 @@
-# Ansible for deploys a Kubernetes cluster
+# Ansible for deploying a Kubernetes cluster
 
 ## Files:
 - `inventory.ini`: Nodes list
