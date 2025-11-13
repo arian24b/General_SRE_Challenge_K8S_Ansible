@@ -10,7 +10,17 @@ from sqlalchemy import Column, Integer, String, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.orm import declarative_base
 
-app = FastAPI(title="IP Geolocation API", description="API for IP geolocation with caching")
+from contextlib import asynccontextmanager
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await create_tables()
+    yield
+    pass
+
+
+app = FastAPI(title="IP Geolocation API", description="API for IP geolocation with caching", lifespan=lifespan)
 
 REQUEST_COUNT = Counter("api_requests_total", "Total API requests", ["method", "endpoint", "status"])
 REQUEST_LATENCY = Histogram(
@@ -19,11 +29,16 @@ REQUEST_LATENCY = Histogram(
     ["method", "endpoint"],
 )
 
-DATABASE_URL = f"postgresql+asyncpg://{os.getenv('DB_USER', 'postgres')}:{os.getenv('DB_PASSWORD', 'password')}@{os.getenv('DB_HOST', 'postgres-service')}:{os.getenv('DB_PORT', '5432')}/{os.getenv('DB_NAME', 'ip_geolocation')}"
+DATABASE_URL = f"postgresql+asyncpg://{os.getenv('DB_USER', 'postgres')}:{os.getenv('DB_PASSWORD', 'password')}@{os.getenv('DB_HOST', 'postgres-service')}:{os.getenv('DB_PORT', '5432')}/{os.getenv('DB_NAME', 'postgres')}"
 
 engine = create_async_engine(DATABASE_URL, echo=False)
 SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 Base = declarative_base()
+
+
+async def create_tables():
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
 
 
 @dataclass
@@ -46,7 +61,7 @@ async def fetch_ip_country(ip: IPv4Address | IPv6Address) -> str | None:
         response = await client.get(f"http://ip-api.com/json/{ip}?fields=countryCode")
         response.raise_for_status()
         data = response.json()
-        return data.get("country_code", None)
+        return data.get("countryCode", None)
 
 
 async def get_ip_data_from_db(ip: IPv4Address | IPv6Address):
