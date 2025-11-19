@@ -1,0 +1,40 @@
+# Git
+.git
+.gitignore
+
+# Docker
+.dockerignore
+Dockerfile
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+
+# Environment
+.env
+.env.example
+
+# Config
+.pre-commit-config.yaml
+.python-version
+
+# Tests
+tests/
+
+# Docs
+README.md
+
+# Lock files (since uv lock is run in build)
+uv.lock
+
+# Logs
+*.log
