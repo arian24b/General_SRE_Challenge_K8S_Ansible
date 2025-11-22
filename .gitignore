@@ -33,10 +33,23 @@ MANIFEST
 .terraform/
 *.tfstate
 *.tfstate.backup
+*.tfstate.*
 .terraform.lock.hcl
+tfplan
+*.tfvars
+!terraform.tfvars.example
 
 # Ansible
 *.retry
+.ansible/
+inventory.ini
+!inventory_template.ini.j2
+
+# Kubernetes
+kubeconfig
+*.kubeconfig
+*-secret.yaml
+!*-secret.yaml.example
 
 # Logs
 *.log
@@ -46,6 +59,12 @@ Thumbs.db
 
 # Monitoring
 # Add specific if needed
+
+# Testing
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
 
 # Database
 # If any temp files

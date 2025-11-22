@@ -1,0 +1,322 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      deploy_infrastructure:
+        description: "Deploy infrastructure"
+        type: boolean
+        default: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/api
+
+jobs:
+  # ============= CONTINUOUS INTEGRATION =============
+  lint-and-test:
+    name: Lint & Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Install dependencies
+        run: |
+          cd application/api
+          uv sync --frozen
+
+      - name: Run linting
+        run: |
+          cd application/api
+          uv run ruff check .
+
+      - name: Run tests
+        run: |
+          cd application/api
+          uv run pytest --cov=app --cov-report=xml --cov-report=term
+
+      - name: Upload coverage
+        if: always()
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./application/api/coverage.xml
+          flags: unittests
+
+  validate-manifests:
+    name: Validate Kubernetes Manifests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: "v3.14.0"
+
+      - name: Lint Helm charts
+        run: |
+          cd application/helm
+          helm dependency update
+          helm lint .
+
+      - name: Validate Helm template
+        run: |
+          cd application/helm
+          helm template test . --debug --dry-run
+
+      - name: Validate Ansible syntax
+        run: |
+          pip install ansible
+          cd infrastructure/ansible
+          ansible-playbook --syntax-check provision-infrastructure.yml
+          ansible-playbook --syntax-check setup-cluster.yml
+
+  # ============= BUILD & PUSH =============
+  build-and-push:
+    name: Build & Push Docker Image
+    needs: [lint-and-test, validate-manifests]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image-tag: ${{ steps.meta.outputs.version }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./application/api
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run Trivy security scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          format: "sarif"
+          output: "trivy-results.sarif"
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: "trivy-results.sarif"
+
+  # ============= INFRASTRUCTURE DEPLOYMENT =============
+  deploy-infrastructure:
+    name: Deploy Infrastructure
+    needs: build-and-push
+    if: github.event.inputs.deploy_infrastructure == 'true'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.6.0"
+
+      - name: Setup Ansible
+        run: pip install ansible
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H ${{ secrets.MASTER_IP }} >> ~/.ssh/known_hosts || true
+
+      - name: Terraform Init
+        run: |
+          cd infrastructure/terraform
+          terraform init
+
+      - name: Terraform Plan
+        run: |
+          cd infrastructure/terraform
+          terraform plan \
+            -var="arvan_api_key=${{ secrets.ARVAN_API_KEY }}" \
+            -out=tfplan
+
+      - name: Terraform Apply
+        run: |
+          cd infrastructure/terraform
+          terraform apply -auto-approve tfplan
+
+      - name: Generate Ansible Inventory
+        run: |
+          cd infrastructure/terraform
+          terraform output -json > outputs.json
+          cd ../ansible
+          # Generate inventory from Terraform outputs
+          python3 -c "
+          import json, sys
+          with open('../terraform/outputs.json') as f:
+              data = json.load(f)
+          master_ip = data['master_ip']['value']
+          worker_ips = data['worker_ips']['value']
+
+          with open('inventory.ini', 'w') as f:
+              f.write('[k8s_master]\n')
+              f.write(f'master ansible_host={master_ip} ansible_user=root\n\n')
+              f.write('[k8s_workers]\n')
+              for i, ip in enumerate(worker_ips):
+                  f.write(f'worker{i} ansible_host={ip} ansible_user=root\n')
+              f.write('\n[k8s:children]\nk8s_master\nk8s_workers\n')
+          "
+
+      - name: Deploy Kubernetes Cluster
+        run: |
+          cd infrastructure/ansible
+          ansible-playbook -i inventory.ini setup-cluster.yml
+
+      - name: Setup kubectl
+        run: |
+          mkdir -p ~/.kube
+          MASTER_IP=$(terraform -chdir=infrastructure/terraform output -raw master_ip)
+          scp -o StrictHostKeyChecking=no root@$MASTER_IP:~/.kube/config ~/.kube/config
+          sed -i "s/127.0.0.1/$MASTER_IP/g" ~/.kube/config
+          kubectl get nodes
+
+      - name: Deploy Monitoring Stack
+        run: |
+          cd infrastructure/ansible
+          ansible-playbook -i inventory.ini deploy-monitoring.yml \
+            -e "grafana_admin_password=${{ secrets.GRAFANA_PASSWORD }}"
+
+      - name: Deploy PostgreSQL
+        run: |
+          cd infrastructure/ansible
+          ansible-playbook -i inventory.ini deploy-postgres.yml
+
+  # ============= APPLICATION DEPLOYMENT =============
+  deploy-application:
+    name: Deploy Application
+    needs: build-and-push
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Setup kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > ~/.kube/config
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v3
+
+      - name: Create namespace
+        run: |
+          kubectl create namespace application --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Create secrets
+        run: |
+          kubectl create secret generic postgres-secret \
+            --from-literal=username="${{ secrets.DB_USERNAME }}" \
+            --from-literal=password="${{ secrets.DB_PASSWORD }}" \
+            --from-literal=database="${{ secrets.DB_NAME }}" \
+            --namespace=application \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Deploy application with Helm
+        run: |
+          cd application/helm
+          helm dependency update
+          helm upgrade --install api . \
+            --namespace application \
+            --set image.repository=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }} \
+            --set image.tag=${{ needs.build-and-push.outputs.image-tag }} \
+            --set database.host=postgres-service \
+            --set database.port=5432 \
+            --wait --timeout 5m
+
+      - name: Verify deployment
+        run: |
+          kubectl rollout status deployment/api -n application --timeout=5m
+          kubectl get pods -n application
+          kubectl get svc -n application
+
+      - name: Run smoke tests
+        run: |
+          API_URL=$(kubectl get svc api -n application -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          if [ -z "$API_URL" ]; then
+            API_URL=$(kubectl get svc api -n application -o jsonpath='{.spec.clusterIP}')
+          fi
+          kubectl run curl-test --image=curlimages/curl:latest --rm -i --restart=Never -- \
+            curl -f http://$API_URL:80/health || exit 1
+  # ============= GITOPS SYNC (Optional) =============
+  sync-argocd:
+    name: Sync ArgoCD Applications
+    needs: build-and-push
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Install ArgoCD CLI
+        run: |
+          curl -sSL -o argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+          chmod +x argocd
+          sudo mv argocd /usr/local/bin/
+
+      - name: Login to ArgoCD
+        run: |
+          argocd login ${{ secrets.ARGOCD_SERVER }} \
+            --username admin \
+            --password ${{ secrets.ARGOCD_PASSWORD }} \
+            --insecure
+
+      - name: Sync applications
+        run: |
+          argocd app sync ip-geolocation-api --async
+          argocd app sync monitoring-stack --async
+
+      - name: Wait for sync
+        run: |
+          argocd app wait ip-geolocation-api --timeout 300
+          argocd app wait monitoring-stack --timeout 300
