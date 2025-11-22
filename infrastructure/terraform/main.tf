@@ -7,14 +7,21 @@ terraform {
   }
 
   backend "s3" {
-    bucket                      = "sre-challenge-terraform"
-    key                         = "k8s-cluster/terraform.tfstate"
-    region                      = "ir-thr-at1"
-    endpoint                    = "https://s3.ir-tbz-sh1.arvanstorage.ir"
+    bucket   = "sre-challenge-terraform"
+    key      = "k8s-cluster/terraform.tfstate"
+    region   = "ir-thr-at1"
+    
+    endpoints = {
+      s3 = "https://s3.ir-tbz-sh1.arvanstorage.ir"
+    }
+    
     skip_credentials_validation = true
     skip_metadata_api_check     = true
     skip_region_validation      = true
+    skip_requesting_account_id  = true
     force_path_style            = true
+    
+    use_path_style = true
   }
 }
 
