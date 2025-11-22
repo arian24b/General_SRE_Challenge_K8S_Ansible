@@ -172,11 +172,18 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.ARVAN_S3_SECRET_KEY }}
           AWS_EC2_METADATA_DISABLED: true
           AWS_REGION: ir-thr-at1
+          AWS_SKIP_REQUESTING_ACCOUNT_ID: true
+          AWS_SKIP_CREDENTIALS_VALIDATION: true
+          AWS_SKIP_METADATA_API_CHECK: true
         run: |
           cd infrastructure/terraform
           terraform init -reconfigure
 
       - name: Terraform Plan
+        env:
+          AWS_SKIP_REQUESTING_ACCOUNT_ID: true
+          AWS_SKIP_CREDENTIALS_VALIDATION: true
+          AWS_SKIP_METADATA_API_CHECK: true
         run: |
           cd infrastructure/terraform
           terraform plan \
@@ -184,6 +191,10 @@ jobs:
             -out=tfplan
 
       - name: Terraform Apply
+        env:
+          AWS_SKIP_REQUESTING_ACCOUNT_ID: true
+          AWS_SKIP_CREDENTIALS_VALIDATION: true
+          AWS_SKIP_METADATA_API_CHECK: true
         run: |
           cd infrastructure/terraform
           terraform apply -auto-approve tfplan
