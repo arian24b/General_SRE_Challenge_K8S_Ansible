@@ -37,8 +37,8 @@ async def test_get_country_fetched():
 async def test_get_country_not_found():
     ip = IPv4Address("8.8.8.8")
     with (
-        patch("app.routers.geolocate.get_ip_data_from_db", return_value=None) as mock_get,
-        patch("app.routers.geolocate.fetch_ip_country", return_value=None) as mock_fetch,
+        patch("app.routers.geolocate.get_ip_data_from_db", return_value=None),
+        patch("app.routers.geolocate.fetch_ip_country", return_value=None),
     ):
         with pytest.raises(Exception):  # HTTPException
             await get_country(ip)
