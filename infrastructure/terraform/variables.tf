@@ -1,23 +1,71 @@
-variable "hcloud_token" {
-  description = "Hetzner Cloud API Token"
+variable "arvan_api_key" {
+  description = "ArvanCloud API Key (format: apikey <36-character-key>)"
   type        = string
   sensitive   = true
 }
 
-variable "location" {
-  description = "Hetzner location (fsn1)"
+variable "region" {
+  description = "ArvanCloud region (ir-thr-c2)"
   type        = string
-  default     = "fsn1"
+  default     = "ir-thr-c2"
 }
 
 variable "os_image" {
-  description = "OS image for servers"
+  description = "OS image name (from available distributions)"
   type        = string
-  default     = "ubuntu-24.04"
+  default     = "22.04"  # Available: 24.04, 22.04, 20.04, etc.
 }
 
 variable "ssh_public_key_path" {
   description = "Path to SSH public key"
   type        = string
   default     = "~/.ssh/id_ed25519"
+}
+
+variable "worker_count" {
+  description = "Number of worker nodes to create"
+  type        = number
+  default     = 2
+}
+
+variable "flavor" {
+  description = "Instance flavor name (from available plans)"
+  type        = string
+  default     = "eco-small1"  # Available: eco-small1, g5-small1, etc.
+}
+
+variable "disk_size" {
+  description = "Root disk size (GB) for instances"
+  type        = number
+  default     = 25
+}
+
+variable "etcd_volume_size" {
+  description = "Size (GB) for etcd volume"
+  type        = number
+  default     = 50
+}
+
+variable "registry_volume_size" {
+  description = "Size (GB) for registry volume"
+  type        = number
+  default     = 100
+}
+
+variable "logs_volume_size" {
+  description = "Size (GB) for logs volume"
+  type        = number
+  default     = 50
+}
+
+variable "network_name" {
+  description = "Name of the private network"
+  type        = string
+  default     = "k8s-network"
+}
+
+variable "network_cidr" {
+  description = "CIDR block for the network"
+  type        = string
+  default     = "10.0.0.0/16"
 }

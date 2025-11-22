@@ -1,4 +1,14 @@
-hcloud_token         = "hetzner api token"
-location             = "fsn1"
-os_image             = "ubuntu-24.04"
-ssh_public_key_path  = "~/.ssh/id_ed25519.pub"
+arvan_api_key        = "apikey your-36-char-api-key"
+region               = "ir-thr-c2"
+os_image             = "22.04"  # Available: 24.04, 22.04, 20.04, 12, 11, 10
+ssh_public_key_path  = "~/.ssh/id_ed25519"
+
+# Instance configuration
+worker_count         = 2
+flavor               = "eco-small1"  # Available: eco-small1, g5-small1, eco-small2, etc.
+disk_size            = 25
+
+# Volume sizes (GB)
+etcd_volume_size     = 50
+registry_volume_size = 100
+logs_volume_size     = 50

@@ -1,27 +1,34 @@
-output "master_public_ip" {
-  description = "Public IP of master"
-  value       = hcloud_server.k8s_master.ipv4_address
-}
-
-output "worker_public_ips" {
-  description = "Public IPs of workers"
-  value       = [for w in hcloud_server.k8s_worker : w.ipv4_address]
-}
-
-output "private_ips" {
-  description = "Private IPs"
-  value = {
-    master = hcloud_server_network.k8s_master_net.ip
-    workers = [for n in hcloud_server_network.k8s_worker_net : n.ip]
-  }
-}
-
-output "ssh_key_id" {
-  description = "SSH Key ID"
-  value       = hcloud_ssh_key.k8s_key.id
+output "security_group_id" {
+  description = "ID of the security group"
+  value       = module.security.security_group_id
 }
 
 output "network_id" {
-  description = "Private Network ID"
-  value       = hcloud_network.k8s_net.id
+  description = "ID of the private network"
+  value       = module.networking.network_id
+}
+
+output "master_ip" {
+  description = "IP address of the master node"
+  value       = module.compute.master_ip
+}
+
+output "worker_ips" {
+  description = "IP addresses of the worker nodes"
+  value       = module.compute.worker_ips
+}
+
+output "etcd_volume_id" {
+  description = "ID of the etcd volume"
+  value       = module.storage.etcd_volume_id
+}
+
+output "registry_volume_id" {
+  description = "ID of the registry volume"
+  value       = module.storage.registry_volume_id
+}
+
+output "logs_volume_id" {
+  description = "ID of the logs volume"
+  value       = module.storage.logs_volume_id
 }
