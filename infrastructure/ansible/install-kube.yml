@@ -2,39 +2,5 @@
 - name: Install Kubernetes tools on all nodes
   hosts: k8s
   become: yes
-  tasks:
-    - name: Update apt cache
-      apt:
-        update_cache: yes
-
-    - name: Install required packages
-      apt:
-        name: [apt-transport-https, ca-certificates, curl]
-        state: present
-
-    - name: Add Kubernetes GPG key
-      shell: curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.34/deb/Release.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
-      args:
-        creates: /etc/apt/keyrings/kubernetes-apt-keyring.gpg
-
-    - name: Add Kubernetes repository
-      shell: echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.34/deb/ /' | tee /etc/apt/sources.list.d/kubernetes.list
-      args:
-        creates: /etc/apt/sources.list.d/kubernetes.list
-
-    - name: Update apt cache after adding repo
-      apt:
-        update_cache: yes
-
-    - name: Install kubelet, kubeadm, kubectl
-      apt:
-        name: [kubelet, kubeadm, kubectl]
-        state: present
-
-    - name: Hold Kubernetes packages
-      command: apt-mark hold kubelet kubeadm kubectl
-
-    - name: Enable kubelet service
-      systemd:
-        name: kubelet
-        enabled: yes
+  roles:
+    - install-kubernetes

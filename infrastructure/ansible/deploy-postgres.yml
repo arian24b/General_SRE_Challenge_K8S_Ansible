@@ -1,0 +1,65 @@
+---
+- name: Deploy PostgreSQL cluster on Kubernetes
+  hosts: masters
+  become: yes
+  environment:
+    KUBECONFIG: /root/.kube/config
+  tasks:
+    - name: Add CrunchyData Helm repository
+      command: helm repo add crunchydata https://charts.crunchydata.com
+      changed_when: false
+
+    - name: Update Helm repositories
+      command: helm repo update
+      changed_when: false
+
+    - name: Create application namespace
+      command: kubectl create namespace application --dry-run=client -o yaml
+      register: app_ns
+      changed_when: false
+
+    - name: Apply application namespace
+      shell: echo "{{ app_ns.stdout }}" | kubectl apply -f -
+      changed_when: false
+
+    - name: Install Postgres Operator
+      command: helm upgrade --install postgres-operator crunchydata/postgres-operator --namespace application --wait --timeout 5m
+      changed_when: true
+
+    - name: Wait for Postgres Operator to be ready
+      command: kubectl wait --for=condition=available --timeout=300s deployment/postgres-operator --namespace application
+      changed_when: false
+
+    - name: Copy PostgreSQL manifests
+      copy:
+        src: "{{ item }}"
+        dest: "/tmp/{{ item | basename }}"
+        mode: "0644"
+      loop:
+        - "../../application/database/postgres-cluster.yaml"
+        - "../../application/database/postgres-secret.yaml"
+
+    - name: Apply PostgreSQL secret
+      command: kubectl apply -f /tmp/postgres-secret.yaml --namespace application
+      changed_when: true
+
+    - name: Apply PostgreSQL cluster
+      command: kubectl apply -f /tmp/postgres-cluster.yaml --namespace application
+      changed_when: true
+
+    - name: Wait for PostgreSQL cluster to be ready
+      command: kubectl wait --for=condition=ready --timeout=600s pods -l postgres-operator.crunchydata.com/cluster=postgres-cluster --namespace application
+      changed_when: false
+      register: postgres_ready
+      until: postgres_ready.rc == 0
+      retries: 5
+      delay: 30
+
+    - name: Get PostgreSQL connection details
+      command: kubectl get secret postgres-cluster-pguser-appuser -n application -o jsonpath='{.data.uri}'
+      register: postgres_uri_b64
+      changed_when: false
+
+    - name: Display PostgreSQL connection info
+      debug:
+        msg: "PostgreSQL URI: {{ postgres_uri_b64.stdout | b64decode }}"

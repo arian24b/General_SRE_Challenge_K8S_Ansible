@@ -1,0 +1,70 @@
+---
+- name: Deploy monitoring stack on Kubernetes cluster
+  hosts: masters
+  become: yes
+  environment:
+    KUBECONFIG: /root/.kube/config
+  tasks:
+    - name: Add Grafana Helm repository
+      command: helm repo add grafana https://grafana.github.io/helm-charts
+      changed_when: false
+
+    - name: Update Helm repositories
+      command: helm repo update
+      changed_when: false
+
+    - name: Create monitoring namespace
+      command: kubectl create namespace monitoring --dry-run=client -o yaml
+      register: monitoring_ns
+      changed_when: false
+
+    - name: Apply monitoring namespace
+      shell: echo "{{ monitoring_ns.stdout }}" | kubectl apply -f -
+      changed_when: false
+
+    - name: Copy monitoring values files
+      copy:
+        src: "{{ item.src }}"
+        dest: "/tmp/{{ item.dest }}"
+        mode: "0644"
+      loop:
+        - {
+            src: "../../monitoring/alloy-values.yaml",
+            dest: "alloy-values.yaml",
+          }
+        - {
+            src: "../../monitoring/grafana-values.yaml",
+            dest: "grafana-values.yaml",
+          }
+        - {
+            src: "../../monitoring/alerts/alertmanager-values.yaml",
+            dest: "alertmanager-values.yaml",
+          }
+
+    - name: Install Mimir
+      command: helm upgrade --install mimir grafana/mimir-distributed --namespace monitoring --wait
+      changed_when: true
+
+    - name: Install Alertmanager
+      command: helm upgrade --install alertmanager grafana/alertmanager -f /tmp/alertmanager-values.yaml --namespace monitoring --wait
+      changed_when: true
+
+    - name: Install Alloy
+      command: helm upgrade --install alloy grafana/alloy -f /tmp/alloy-values.yaml --namespace monitoring --wait
+      changed_when: true
+
+    - name: Install Grafana
+      command: helm upgrade --install grafana grafana/grafana -f /tmp/grafana-values.yaml --namespace monitoring --wait
+      changed_when: true
+
+    - name: Get Grafana admin password
+      command: kubectl get secret --namespace monitoring grafana -o jsonpath="{.data.admin-password}"
+      register: grafana_password_b64
+      changed_when: false
+
+    - name: Display Grafana credentials
+      debug:
+        msg:
+          - "Grafana URL: http://{{ ansible_host }}:30000"
+          - "Username: admin"
+          - "Password: {{ grafana_password_b64.stdout | b64decode }}"

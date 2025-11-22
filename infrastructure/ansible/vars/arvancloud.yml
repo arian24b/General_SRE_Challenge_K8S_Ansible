@@ -1,0 +1,36 @@
+# ArvanCloud Infrastructure Variables
+# Best practice: Keep sensitive and environment-specific variables separate
+
+arvan_api_base: "https://api.arvancloud.ir/iaas/v1"
+arvan_api_key: "{{ lookup('env', 'ARVAN_API_KEY') }}"
+region: "ir-thr-c2" # Tehran region - adjust based on your needs
+
+# Network configuration
+network_name: "k8s-private-network"
+network_cidr: "10.0.0.0/16"
+
+# Volume configuration - sized for production-ready cluster
+volumes:
+  - name: "k8s-etcd-volume"
+    size_gb: 50
+    type: "ssd" # Fast storage for etcd
+  - name: "k8s-registry-volume"
+    size_gb: 100
+    type: "ssd" # Fast storage for container registry
+  - name: "k8s-logs-volume"
+    size_gb: 100
+    type: "hdd" # Cost-effective for logs
+
+# Server configuration - balanced for Kubernetes workloads
+server_image: "ubuntu-20.04" # LTS version for stability
+server_flavor: "c2-2vcpu-4gb" # 2 vCPU, 4GB RAM - adjust based on workload
+ssh_key_name: "k8s-ssh-key" # Pre-created SSH key in ArvanCloud
+
+# Server definitions
+servers:
+  - name: "k8s-master"
+    role: "master"
+  - name: "k8s-worker1"
+    role: "worker"
+  - name: "k8s-worker2"
+    role: "worker"

@@ -1,0 +1,141 @@
+---
+# Provision infrastructure on ArvanCloud for Kubernetes cluster
+# This playbook creates:
+# - 1 private network
+# - 3 volumes for persistent data
+# - 3 servers (1 master, 2 workers) attached to the network and volumes
+
+- name: Provision ArvanCloud Infrastructure for K8s Cluster
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - vars/arvancloud.yml
+
+  tasks:
+    - name: Check if ARVAN_API_KEY is set
+      fail:
+        msg: "ARVAN_API_KEY environment variable must be set"
+      when: arvan_api_key == ""
+      tags: always
+
+    - name: Create private network
+      uri:
+        url: "{{ arvan_api_base }}/networks"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ arvan_api_key }}"
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          name: "{{ network_name }}"
+          cidr: "{{ network_cidr }}"
+          region: "{{ region }}"
+        status_code: 201
+      register: network_result
+      retries: 3
+      delay: 5
+      until: network_result.status == 201
+      tags: network
+
+    - name: Set network ID fact
+      set_fact:
+        network_id: "{{ network_result.json.id }}"
+      tags: network
+
+    - name: Create volumes
+      uri:
+        url: "{{ arvan_api_base }}/volumes"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ arvan_api_key }}"
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          name: "{{ item.name }}"
+          size: "{{ item.size_gb }}"
+          volume_type: "{{ item.type }}"
+          region: "{{ region }}"
+        status_code: 201
+      loop: "{{ volumes }}"
+      register: volume_results
+      retries: 3
+      delay: 5
+      until: volume_results.status == 201
+      tags: volumes
+
+    - name: Set volume IDs fact
+      set_fact:
+        volume_ids: "{{ volume_results.results | map(attribute='json.id') | list }}"
+      tags: volumes
+
+    - name: Create servers
+      uri:
+        url: "{{ arvan_api_base }}/servers"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ arvan_api_key }}"
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          name: "{{ item.name }}"
+          image: "{{ server_image }}"
+          flavor: "{{ server_flavor }}"
+          key_name: "{{ ssh_key_name }}"
+          networks:
+            - uuid: "{{ network_id }}"
+          volumes: "{{ volume_ids }}"
+          region: "{{ region }}"
+        status_code: 201
+      loop: "{{ servers }}"
+      register: server_results
+      retries: 3
+      delay: 10
+      until: server_results.status == 201
+      tags: servers
+
+    - name: Wait for servers to be active
+      uri:
+        url: "{{ arvan_api_base }}/servers/{{ item.json.id }}"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ arvan_api_key }}"
+        status_code: 200
+      register: server_status
+      until: server_status.json.status == "ACTIVE"
+      retries: 30
+      delay: 10
+      loop: "{{ server_results.results }}"
+      tags: servers
+
+    - name: Generate dynamic inventory
+      template:
+        src: inventory_template.ini.j2
+        dest: "{{ playbook_dir }}/inventory_provisioned.ini"
+      vars:
+        master_ip: '{{ server_results.results | selectattr(''item.role'', ''equalto'', ''master'') | map(attribute=''json'') | first | json_query(''addresses."'' + network_name + ''"[0].addr'') }}'
+        worker_ips: '{{ server_results.results | selectattr(''item.role'', ''equalto'', ''worker'') | map(attribute=''json'') | json_query(''[].addresses."'' + network_name + ''"[0].addr'') }}'
+      tags: inventory
+
+    - name: Save provisioned resources for cleanup
+      copy:
+        content: |
+          network_id: "{{ network_id }}"
+          volume_ids: {{ volume_ids }}
+          server_ids: {{ server_results.results | map(attribute='json.id') | list }}
+        dest: "{{ playbook_dir }}/provisioned_resources.yml"
+      tags: inventory
+
+    - name: Display provisioned infrastructure info
+      debug:
+        msg: |
+          Infrastructure provisioned successfully!
+          Network: {{ network_name }} (ID: {{ network_id }})
+          Volumes: {{ volumes | map(attribute='name') | list }}
+          Servers:
+          {% for server in server_results.results %}
+          - {{ server.item.name }}: {{ server.json.addresses[network_name][0].addr }}
+          {% endfor %}
+
+          Use inventory_provisioned.ini for subsequent Ansible runs.
+      tags: always

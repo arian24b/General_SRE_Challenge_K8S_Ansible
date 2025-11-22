@@ -1,0 +1,21 @@
+---
+# Master playbook for complete cluster setup
+# This orchestrates the entire deployment process
+
+- name: Install container runtime on all nodes
+  import_playbook: install-containerd.yml
+
+- name: Install Kubernetes components on all nodes
+  import_playbook: install-kube.yml
+
+- name: Initialize Kubernetes cluster on master
+  import_playbook: init-cluster.yml
+
+- name: Join worker nodes to cluster
+  import_playbook: join-workers.yml
+
+- name: Deploy monitoring stack
+  import_playbook: deploy-monitoring.yml
+
+- name: Deploy PostgreSQL cluster
+  import_playbook: deploy-postgres.yml

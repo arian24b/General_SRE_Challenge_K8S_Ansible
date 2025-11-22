@@ -2,40 +2,5 @@
 - name: Initialize Kubernetes cluster on master
   hosts: masters
   become: yes
-  tasks:
-    - name: Initialize cluster
-      command: kubeadm init --pod-network-cidr=10.244.0.0/16 --apiserver-advertise-address={{ ansible_host }}
-      register: init_output
-      failed_when: false
-
-    - name: Create .kube directory
-      file:
-        path: /root/.kube
-        state: directory
-      when: "'already exists' not in init_output.stdout"
-
-    - name: Copy admin config
-      copy:
-        src: /etc/kubernetes/admin.conf
-        dest: /root/.kube/config
-        remote_src: yes
-      when: "'already exists' not in init_output.stdout"
-
-    - name: Install Flannel
-      command: kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
-      environment:
-        KUBECONFIG: /root/.kube/config
-      when: "'already exists' not in init_output.stdout"
-
-    - name: Get join command
-      command: kubeadm token create --print-join-command
-      register: join_command
-      environment:
-        KUBECONFIG: /root/.kube/config
-      when: "'already exists' not in init_output.stdout"
-
-    - name: Save join command
-      copy:
-        content: "{{ join_command.stdout }}"
-        dest: /root/join-command.sh
-      when: join_command.changed
+  roles:
+    - init-cluster

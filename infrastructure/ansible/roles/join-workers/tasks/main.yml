@@ -1,0 +1,14 @@
+---
+- name: Check if node is already joined
+  stat:
+    path: /etc/kubernetes/kubelet.conf
+  register: kubelet_conf
+
+- name: Read join command
+  set_fact:
+    join_command: "{{ lookup('file', '/tmp/k8s-join-command.sh') }}"
+  when: not kubelet_conf.stat.exists
+
+- name: Join worker node to cluster
+  command: "{{ join_command }}"
+  when: not kubelet_conf.stat.exists

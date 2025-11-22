@@ -2,13 +2,5 @@
 - name: Join workers to Kubernetes cluster
   hosts: workers
   become: yes
-  tasks:
-    - name: Fetch join command from master
-      slurp:
-        src: /root/join-command.sh
-      delegate_to: "{{ groups['masters'][0] }}"
-      register: join_cmd_file
-
-    - name: Join cluster
-      command: "{{ join_cmd_file.content | b64decode }}"
-      when: join_cmd_file.content is defined
+  roles:
+    - join-workers
