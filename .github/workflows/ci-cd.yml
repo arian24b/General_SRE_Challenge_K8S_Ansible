@@ -170,9 +170,11 @@ jobs:
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.ARVAN_S3_ACCESS_KEY }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.ARVAN_S3_SECRET_KEY }}
+          AWS_EC2_METADATA_DISABLED: true
+          AWS_REGION: ir-thr-at1
         run: |
           cd infrastructure/terraform
-          terraform init
+          terraform init -reconfigure
 
       - name: Terraform Plan
         run: |
