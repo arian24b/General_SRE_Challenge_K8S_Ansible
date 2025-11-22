@@ -11,7 +11,7 @@ resource "arvan_security_group" "k8s_sg" {
   name        = "k8s-security-group"
   description = "Security group for Kubernetes cluster"
   region      = var.region
-  
+
   rules = [
     {
       direction      = "ingress"
