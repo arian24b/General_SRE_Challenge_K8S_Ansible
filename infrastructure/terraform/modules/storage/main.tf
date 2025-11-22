@@ -1,3 +1,12 @@
+terraform {
+  required_providers {
+    arvan = {
+      source = "terraform.arvancloud.ir/arvancloud/iaas"
+      version = "0.8.1"
+    }
+  }
+}
+
 resource "arvan_volume" "etcd_volume" {
   region      = var.region
   name        = "k8s-etcd-volume-${var.region}"

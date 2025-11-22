@@ -1,3 +1,12 @@
+terraform {
+  required_providers {
+    arvan = {
+      source = "terraform.arvancloud.ir/arvancloud/iaas"
+      version = "0.8.1"
+    }
+  }
+}
+
 resource "arvan_security_group" "k8s_sg" {
   name        = "k8s-security-group"
   description = "Security group for Kubernetes cluster"

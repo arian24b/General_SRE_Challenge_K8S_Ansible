@@ -1,3 +1,12 @@
+terraform {
+  required_providers {
+    arvan = {
+      source = "terraform.arvancloud.ir/arvancloud/iaas"
+      version = "0.8.1"
+    }
+  }
+}
+
 # Data sources
 data "arvan_images" "ubuntu" {
   region     = var.region
