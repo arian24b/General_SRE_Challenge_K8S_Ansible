@@ -35,8 +35,9 @@ resource "arvan_abrak" "k8s_master" {
   flavor_id       = local.selected_flavor.id
   disk_size       = var.disk_size
   security_groups = [var.security_group_id]
-  volumes         = var.volume_ids
-  network_id      = var.network_id
+  networks        = [{
+    network_id = var.network_id
+  }]
 }
 
 # Worker Nodes
@@ -48,13 +49,17 @@ resource "arvan_abrak" "k8s_worker" {
   flavor_id       = local.selected_flavor.id
   disk_size       = var.disk_size
   security_groups = [var.security_group_id]
-  network_id      = var.network_id
+  networks        = [{
+    network_id = var.network_id
+  }]
 }
 
 output "master_ip" {
-  value = arvan_abrak.k8s_master.access_ipv4
+  value = arvan_abrak.k8s_master.id
+  description = "Master node ID (IP address needs to be retrieved from Arvan Cloud console)"
 }
 
 output "worker_ips" {
-  value = arvan_abrak.k8s_worker[*].access_ipv4
+  value = arvan_abrak.k8s_worker[*].id
+  description = "Worker node IDs (IP addresses need to be retrieved from Arvan Cloud console)"
 }

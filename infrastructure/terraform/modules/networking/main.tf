@@ -8,9 +8,11 @@ terraform {
 }
 
 resource "arvan_network" "k8s_network" {
-  name   = var.network_name
-  cidr   = var.network_cidr
-  region = var.region
+  name           = var.network_name
+  cidr           = var.network_cidr
+  region         = var.region
+  enable_gateway = true
+  enable_dhcp    = true
 }
 
 output "network_id" {
