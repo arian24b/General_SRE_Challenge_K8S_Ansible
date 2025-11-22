@@ -9,12 +9,11 @@ terraform {
   backend "s3" {
     bucket = "sre-challenge-terraform"
     key    = "k8s-cluster/terraform.tfstate"
-    region = "ir-thr-at1"
+    region = "default"
 
-    endpoints = {
-      s3 = "https://s3.ir-tbz-sh1.arvanstorage.ir"
-    }
+    endpoint                    = "s3.ir-thr-at1.arvanstorage.ir"
 
+    force_path_style            = true
     skip_credentials_validation = true
     skip_metadata_api_check     = true
     skip_region_validation      = true
