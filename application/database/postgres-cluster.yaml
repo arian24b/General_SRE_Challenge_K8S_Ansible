@@ -5,7 +5,7 @@ metadata:
   namespace: application
 spec:
   image: registry.developers.crunchydata.com/crunchydata/crunchy-postgres:ubi9-17.6-2542
-  postgresVersion: 15
+  postgresVersion: 17
   instances:
     - name: instance1
       replicas: 3
