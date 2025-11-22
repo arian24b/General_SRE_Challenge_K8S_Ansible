@@ -167,6 +167,9 @@ jobs:
           ssh-keyscan -H ${{ secrets.MASTER_IP }} >> ~/.ssh/known_hosts || true
 
       - name: Terraform Init
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.ARVAN_S3_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.ARVAN_S3_SECRET_KEY }}
         run: |
           cd infrastructure/terraform
           terraform init
