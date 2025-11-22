@@ -1,17 +1,38 @@
-# Monitoring Alloy, Mimir, Alertmanager and Grafana
+# Monitoring Stack - Alloy, Mimir, Alertmanager and Grafana
 
-## Installation
+## Automated Installation
+
+The monitoring stack is automatically deployed via Ansible playbook:
+
+```bash
+cd infrastructure/ansible
+ansible-playbook -i inventory.ini deploy-monitoring.yml
+```
+
+This playbook will:
+- Install Mimir for metrics storage
+- Install Alertmanager for alert routing
+- Install Alloy for metrics collection
+- Install Grafana with pre-configured dashboards
+- Automatically provision datasources and dashboards
+
+## Manual Installation (Alternative)
+
+If you prefer to install manually:
 
 ```bash
 helm repo add grafana https://grafana.github.io/helm-charts
 helm repo update
 
-helm install mimir grafana/mimir-distributed
-helm install alertmanager grafana/alertmanager -f alerts/alertmanager-values.yaml
-helm install alloy grafana/alloy -f alloy-values.yaml
-helm install grafana grafana/grafana -f grafana-values.yaml
+kubectl create namespace monitoring
 
-echo "kubectl get secret --namespace default grafana -o jsonpath="{.data.admin-password}" | base64 --decode ; echo"
+helm install mimir grafana/mimir-distributed --namespace monitoring
+helm install alertmanager grafana/alertmanager -f alerts/alertmanager-values.yaml --namespace monitoring
+helm install alloy grafana/alloy -f alloy-values.yaml --namespace monitoring
+helm install grafana grafana/grafana -f grafana-values.yaml --namespace monitoring
+
+# Get Grafana admin password
+kubectl get secret --namespace monitoring grafana -o jsonpath="{.data.admin-password}" | base64 --decode ; echo
 ```
 
 ## Access:
