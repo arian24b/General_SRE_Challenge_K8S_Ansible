@@ -11,9 +11,8 @@ terraform {
     key    = "k8s-cluster/terraform.tfstate"
     region = "default"
 
-    endpoint                    = "s3.ir-thr-at1.arvanstorage.ir"
+    endpoints.s3                    = "https://s3.ir-thr-at1.arvanstorage.ir"
 
-    force_path_style            = true
     skip_credentials_validation = true
     skip_metadata_api_check     = true
     skip_region_validation      = true
