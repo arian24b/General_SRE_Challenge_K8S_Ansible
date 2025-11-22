@@ -74,7 +74,6 @@ export DOCKER_PASSWORD="password"
 
 # 3. Provision infrastructure
 cd infrastructure/ansible
-./setup-environment.sh
 ansible-playbook provision-infrastructure.yml
 ```
 
