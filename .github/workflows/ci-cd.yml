@@ -154,7 +154,7 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: "1.6.0"
+          terraform_version: "1.14.0"
 
       - name: Setup Ansible
         run: pip install ansible

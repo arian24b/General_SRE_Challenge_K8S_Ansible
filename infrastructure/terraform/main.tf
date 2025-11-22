@@ -9,7 +9,7 @@ terraform {
   backend "s3" {
     bucket = "sre-challenge-terraform"
     key    = "k8s-cluster/terraform.tfstate"
-    region = "default"
+    region = "main"
 
     endpoints = {
       s3 = "https://s3.ir-thr-at1.arvanstorage.ir"
