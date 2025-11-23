@@ -27,18 +27,6 @@ locals {
   selected_flavor = [for plan in data.arvan_plans.plans.plans : plan if plan.name == var.flavor][0]
 }
 
-# Floating IPs for public access
-resource "arvan_floating_ip" "master_fip" {
-  region      = var.region
-  description = "Public IP for Kubernetes master node"
-}
-
-resource "arvan_floating_ip" "worker_fip" {
-  count       = var.worker_count
-  region      = var.region
-  description = "Public IP for Kubernetes worker node ${count.index}"
-}
-
 # Master Node
 resource "arvan_abrak" "k8s_master" {
   timeouts {
@@ -55,10 +43,6 @@ resource "arvan_abrak" "k8s_master" {
   ssh_key_name = var.ssh_key_name != "" ? var.ssh_key_name : null
   enable_ipv4  = true
   enable_ipv6  = false
-  floating_ip = {
-    floating_ip_id = arvan_floating_ip.master_fip.id
-    network_id     = var.network_id
-  }
   security_groups = [var.security_group_id]
   networks = [{
     network_id = var.network_id
@@ -83,10 +67,6 @@ resource "arvan_abrak" "k8s_worker" {
   ssh_key_name = var.ssh_key_name != "" ? var.ssh_key_name : null
   enable_ipv4  = true
   enable_ipv6  = false
-  floating_ip = {
-    floating_ip_id = arvan_floating_ip.worker_fip[count.index].id
-    network_id     = var.network_id
-  }
   security_groups = [var.security_group_id]
   networks = [{
     network_id = var.network_id
@@ -99,7 +79,7 @@ output "master_private_ip" {
 }
 
 output "master_public_ip" {
-  value       = arvan_floating_ip.master_fip.address
+  value       = arvan_abrak.k8s_master.networks[0].ip
   description = "Public IP address of the master node"
 }
 
@@ -109,6 +89,6 @@ output "worker_private_ips" {
 }
 
 output "worker_public_ips" {
-  value       = [for fip in arvan_floating_ip.worker_fip : fip.address]
+  value       = [for worker in arvan_abrak.k8s_worker : worker.networks[0].ip]
   description = "Public IP addresses of the worker nodes"
 }
