@@ -29,11 +29,20 @@ locals {
 
 # Master Node
 resource "arvan_abrak" "k8s_master" {
+  timeouts {
+    create = "1h30m"
+    update = "2h"
+    delete = "20m"
+    read   = "10m"
+  }
   region          = var.region
   name            = "k8s-master-${var.region}"
   image_id        = local.ubuntu_image.id
   flavor_id       = local.selected_flavor.id
   disk_size       = var.disk_size
+  server_group_id = ""  # optional
+  enable_ipv4     = true
+  enable_ipv6     = true
   security_groups = [var.security_group_id]
   networks        = [{
     network_id = var.network_id
@@ -43,12 +52,21 @@ resource "arvan_abrak" "k8s_master" {
 
 # Worker Nodes
 resource "arvan_abrak" "k8s_worker" {
-  count           = var.worker_count
+  count = var.worker_count
+  timeouts {
+    create = "1h30m"
+    update = "2h"
+    delete = "20m"
+    read   = "10m"
+  }
   region          = var.region
   name            = "k8s-worker-${count.index}-${var.region}"
   image_id        = local.ubuntu_image.id
   flavor_id       = local.selected_flavor.id
   disk_size       = var.disk_size
+  server_group_id = ""  # optional
+  enable_ipv4     = true
+  enable_ipv6     = true
   security_groups = [var.security_group_id]
   networks        = [{
     network_id = var.network_id
