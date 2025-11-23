@@ -42,7 +42,7 @@ resource "arvan_abrak" "k8s_master" {
   disk_size    = var.disk_size
   ssh_key_name = var.ssh_key_name != "" ? var.ssh_key_name : null
   enable_ipv4  = true
-  enable_ipv6  = false
+  enable_ipv6  = true
   security_groups = [var.security_group_id]
   networks = [{
     network_id = var.network_id
@@ -66,7 +66,7 @@ resource "arvan_abrak" "k8s_worker" {
   disk_size    = var.disk_size
   ssh_key_name = var.ssh_key_name != "" ? var.ssh_key_name : null
   enable_ipv4  = true
-  enable_ipv6  = false
+  enable_ipv6  = true
   security_groups = [var.security_group_id]
   networks = [{
     network_id = var.network_id
@@ -79,7 +79,7 @@ output "master_private_ip" {
 }
 
 output "master_public_ip" {
-  value       = arvan_abrak.k8s_master.networks[0].ip
+  value       = arvan_abrak.k8s_master.networks[1].ip
   description = "Public IP address of the master node"
 }
 
@@ -89,6 +89,6 @@ output "worker_private_ips" {
 }
 
 output "worker_public_ips" {
-  value       = [for worker in arvan_abrak.k8s_worker : worker.networks[0].ip]
+  value       = [for worker in arvan_abrak.k8s_worker : worker.networks[1].ip]
   description = "Public IP addresses of the worker nodes"
 }
