@@ -195,6 +195,41 @@ jobs:
           cd infrastructure/terraform
           terraform apply -auto-approve tfplan
 
+      - name: Wait for servers to be reachable
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.ARVAN_S3_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.ARVAN_S3_SECRET_KEY }}
+          AWS_EC2_METADATA_DISABLED: "true"
+        run: |
+          cd infrastructure/terraform
+          MASTER_IP=$(terraform output -raw master_public_ip)
+          WORKER_IPS=$(terraform output -json worker_public_ips | jq -r '.[]')
+
+          echo "Waiting for master node ($MASTER_IP) to be reachable..."
+          for i in {1..30}; do
+            if ping -c 1 -W 2 $MASTER_IP &> /dev/null; then
+              echo "Master node is reachable!"
+              break
+            fi
+            echo "Attempt $i/30: Master node not reachable yet, waiting..."
+            sleep 10
+          done
+
+          for WORKER_IP in $WORKER_IPS; do
+            echo "Waiting for worker node ($WORKER_IP) to be reachable..."
+            for i in {1..30}; do
+              if ping -c 1 -W 2 $WORKER_IP &> /dev/null; then
+                echo "Worker node $WORKER_IP is reachable!"
+                break
+              fi
+              echo "Attempt $i/30: Worker node not reachable yet, waiting..."
+              sleep 10
+            done
+          done
+
+          echo "All servers are reachable. Waiting additional 30 seconds for system initialization..."
+          sleep 30
+
       - name: Generate Ansible Inventory
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.ARVAN_S3_ACCESS_KEY }}
