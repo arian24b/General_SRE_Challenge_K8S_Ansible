@@ -27,25 +27,38 @@ provider "arvan" {
   api_key = var.arvan_api_key
 }
 
-module "networking" {
-  source       = "./modules/networking"
-  region       = var.region
-  network_name = var.network_name
-  network_cidr = var.network_cidr
-}
-
-module "security" {
-  source = "./modules/security"
+# Use default network
+data "arvan_iaas_options" "default_options" {
   region = var.region
 }
 
-module "storage" {
-  source             = "./modules/storage"
-  region             = var.region
-  etcd_volume_size   = var.etcd_volume_size
-  registry_volume_size = var.registry_volume_size
-  logs_volume_size   = var.logs_volume_size
+# Use default security group
+data "arvan_iaas_security_group" "default_sg" {
+  region = var.region
+  name   = "arDefault"
 }
+
+# Comment out custom networking and security modules since we're using defaults
+# module "networking" {
+#   source       = "./modules/networking"
+#   region       = var.region
+#   network_name = var.network_name
+#   network_cidr = var.network_cidr
+# }
+
+# module "security" {
+#   source = "./modules/security"
+#   region = var.region
+# }
+
+# For now, comment out storage to avoid permission issues
+# module "storage" {
+#   source             = "./modules/storage"
+#   region             = var.region
+#   etcd_volume_size   = var.etcd_volume_size
+#   registry_volume_size = var.registry_volume_size
+#   logs_volume_size   = var.logs_volume_size
+# }
 
 module "compute" {
   source           = "./modules/compute"
@@ -54,7 +67,8 @@ module "compute" {
   flavor           = var.flavor
   disk_size        = var.disk_size
   worker_count     = var.worker_count
-  security_group_id = module.security.security_group_id
-  volume_ids       = [module.storage.etcd_volume_id, module.storage.registry_volume_id, module.storage.logs_volume_id]
-  network_id       = module.networking.network_id
+  security_group_id = data.arvan_iaas_security_group.default_sg.id
+  # volume_ids       = [module.storage.etcd_volume_id, module.storage.registry_volume_id, module.storage.logs_volume_id]
+  volume_ids       = []  # No volumes for now
+  network_id       = data.arvan_iaas_options.default_options.network_id
 }
