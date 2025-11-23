@@ -47,8 +47,8 @@ resource "arvan_abrak" "k8s_master" {
   flavor_id    = local.selected_flavor.id
   disk_size    = var.disk_size
   ssh_key_name = var.ssh_key_name != "" ? var.ssh_key_name : null
-  enable_ipv4  = true
-  enable_ipv6  = true
+  enable_ipv4  = false
+  enable_ipv6  = false
   security_groups = [var.security_group_id]
   networks = [{
     network_id = var.network_id
@@ -82,8 +82,8 @@ resource "arvan_abrak" "k8s_worker" {
   flavor_id    = local.selected_flavor.id
   disk_size    = var.disk_size
   ssh_key_name = var.ssh_key_name != "" ? var.ssh_key_name : null
-  enable_ipv4  = true
-  enable_ipv6  = true
+  enable_ipv4  = false
+  enable_ipv6  = false
   security_groups = [var.security_group_id]
   networks = [{
     network_id = var.network_id
