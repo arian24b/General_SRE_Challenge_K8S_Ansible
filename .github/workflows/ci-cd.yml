@@ -196,6 +196,10 @@ jobs:
           terraform apply -auto-approve tfplan
 
       - name: Generate Ansible Inventory
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.ARVAN_S3_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.ARVAN_S3_SECRET_KEY }}
+          AWS_EC2_METADATA_DISABLED: "true"
         run: |
           cd infrastructure/terraform
           terraform output -json > outputs.json
