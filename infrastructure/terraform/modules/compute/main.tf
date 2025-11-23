@@ -1,7 +1,7 @@
 terraform {
   required_providers {
     arvan = {
-      source  = "terraform.arvancloud.ir/arvancloud/iaas"
+      source = "terraform.arvancloud.ir/arvancloud/iaas"
       version = "0.8.1"
     }
   }
@@ -27,12 +27,6 @@ locals {
   selected_flavor = [for plan in data.arvan_plans.plans.plans : plan if plan.name == var.flavor][0]
 }
 
-# Floating IP for Master
-resource "arvan_floating_ip" "master_public_ip" {
-  region      = var.region
-  description = "Public IP for k8s master node"
-}
-
 # Master Node
 resource "arvan_abrak" "k8s_master" {
   timeouts {
@@ -47,24 +41,13 @@ resource "arvan_abrak" "k8s_master" {
   flavor_id    = local.selected_flavor.id
   disk_size    = var.disk_size
   ssh_key_name = var.ssh_key_name != "" ? var.ssh_key_name : null
-  enable_ipv4  = false
-  enable_ipv6  = false
-  security_groups = [var.security_group_id]
+  enable_ipv4  = true
+  enable_ipv6  = true
+  security_groups = []
   networks = [{
     network_id = var.network_id
   }]
-  floating_ip = {
-    floating_ip_id = arvan_floating_ip.master_public_ip.id
-    network_id     = var.network_id
-  }
   volumes = var.volume_ids
-}
-
-# Floating IPs for Workers
-resource "arvan_floating_ip" "worker_public_ip" {
-  count       = var.worker_count
-  region      = var.region
-  description = "Public IP for k8s worker ${count.index}"
 }
 
 # Worker Nodes
@@ -82,16 +65,12 @@ resource "arvan_abrak" "k8s_worker" {
   flavor_id    = local.selected_flavor.id
   disk_size    = var.disk_size
   ssh_key_name = var.ssh_key_name != "" ? var.ssh_key_name : null
-  enable_ipv4  = false
-  enable_ipv6  = false
-  security_groups = [var.security_group_id]
+  enable_ipv4  = true
+  enable_ipv6  = true
+  security_groups = []
   networks = [{
     network_id = var.network_id
   }]
-  floating_ip = {
-    floating_ip_id = arvan_floating_ip.worker_public_ip[count.index].id
-    network_id     = var.network_id
-  }
 }
 
 output "master_private_ip" {
@@ -100,7 +79,7 @@ output "master_private_ip" {
 }
 
 output "master_public_ip" {
-  value       = arvan_floating_ip.master_public_ip.address
+  value       = arvan_abrak.k8s_master.networks[0].ip
   description = "Public IP address of the master node"
 }
 
@@ -110,7 +89,7 @@ output "worker_private_ips" {
 }
 
 output "worker_public_ips" {
-  value       = [for fip in arvan_floating_ip.worker_public_ip : fip.address]
+  value       = [for worker in arvan_abrak.k8s_worker : worker.networks[0].ip]
   description = "Public IP addresses of the worker nodes"
 }
 

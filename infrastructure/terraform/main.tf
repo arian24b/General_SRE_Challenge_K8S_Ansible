@@ -1,12 +1,11 @@
 terraform {
   required_providers {
     arvan = {
-      source  = "terraform.arvancloud.ir/arvancloud/iaas"
+      source = "terraform.arvancloud.ir/arvancloud/iaas"
       version = "0.8.1"
     }
   }
-
-  backend "s3" {
+    backend "s3" {
     bucket = "sre-challenge-terraform"
     key    = "k8s-cluster/terraform.tfstate"
     region = "main"
@@ -34,11 +33,6 @@ module "networking" {
   network_cidr = var.network_cidr
 }
 
-module "security" {
-  source = "./modules/security"
-  region = var.region
-}
-
 module "storage" {
   source               = "./modules/storage"
   region               = var.region
@@ -48,14 +42,13 @@ module "storage" {
 }
 
 module "compute" {
-  source            = "./modules/compute"
-  region            = var.region
-  os_image          = var.os_image
-  flavor            = var.flavor
-  disk_size         = var.disk_size
-  worker_count      = var.worker_count
-  ssh_key_name      = var.ssh_key_name
-  security_group_id = module.security.security_group_id
-  volume_ids        = [module.storage.etcd_volume_id, module.storage.registry_volume_id, module.storage.logs_volume_id]
-  network_id        = module.networking.network_id
+  source       = "./modules/compute"
+  region       = var.region
+  os_image     = var.os_image
+  flavor       = var.flavor
+  disk_size    = var.disk_size
+  worker_count = var.worker_count
+  ssh_key_name = var.ssh_key_name
+  volume_ids   = [module.storage.etcd_volume_id, module.storage.registry_volume_id, module.storage.logs_volume_id]
+  network_id   = module.networking.network_id
 }

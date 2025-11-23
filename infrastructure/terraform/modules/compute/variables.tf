@@ -27,11 +27,6 @@ variable "worker_count" {
   default     = 2
 }
 
-variable "security_group_id" {
-  description = "Security group ID"
-  type        = string
-}
-
 variable "volume_ids" {
   description = "List of volume IDs to attach to master"
   type        = list(string)

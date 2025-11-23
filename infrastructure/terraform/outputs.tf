@@ -1,8 +1,3 @@
-output "security_group_id" {
-  description = "ID of the security group"
-  value       = module.security.security_group_id
-}
-
 output "network_id" {
   description = "ID of the private network"
   value       = module.networking.network_id
