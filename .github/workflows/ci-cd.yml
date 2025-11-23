@@ -222,6 +222,10 @@ jobs:
           "
 
       - name: Add hosts to known_hosts
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.ARVAN_S3_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.ARVAN_S3_SECRET_KEY }}
+          AWS_EC2_METADATA_DISABLED: "true"
         run: |
           cd infrastructure/terraform
           MASTER_IP=$(terraform output -raw master_ip)
@@ -237,6 +241,10 @@ jobs:
           ansible-playbook -i inventory.ini setup-cluster.yml
 
       - name: Setup kubectl
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.ARVAN_S3_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.ARVAN_S3_SECRET_KEY }}
+          AWS_EC2_METADATA_DISABLED: "true"
         run: |
           mkdir -p ~/.kube
           MASTER_IP=$(terraform -chdir=infrastructure/terraform output -raw master_ip)
