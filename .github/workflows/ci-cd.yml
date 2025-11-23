@@ -164,7 +164,7 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -H ${{ secrets.MASTER_IP }} >> ~/.ssh/known_hosts || true
+          ssh-keyscan -H github.com >> ~/.ssh/known_hosts || true
 
       - name: Terraform Init
         env:
@@ -220,6 +220,16 @@ jobs:
                   f.write(f'worker{i} ansible_host={ip} ansible_user=root\n')
               f.write('\n[k8s:children]\nk8s_master\nk8s_workers\n')
           "
+
+      - name: Add hosts to known_hosts
+        run: |
+          cd infrastructure/terraform
+          MASTER_IP=$(terraform output -raw master_ip)
+          ssh-keyscan -H $MASTER_IP >> ~/.ssh/known_hosts || true
+          WORKER_IPS=$(terraform output -json worker_ips | jq -r '.[]')
+          for ip in $WORKER_IPS; do
+            ssh-keyscan -H $ip >> ~/.ssh/known_hosts || true
+          done
 
       - name: Deploy Kubernetes Cluster
         run: |

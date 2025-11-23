@@ -74,11 +74,11 @@ resource "arvan_abrak" "k8s_worker" {
 }
 
 output "master_ip" {
-  value = arvan_abrak.k8s_master.id
-  description = "ID of the master node (IP address available in ArvanCloud console)"
+  value = arvan_abrak.k8s_master.networks[0].ip
+  description = "Public IP address of the master node"
 }
 
 output "worker_ips" {
-  value = arvan_abrak.k8s_worker[*].id
-  description = "IDs of the worker nodes (IP addresses available in ArvanCloud console)"
+  value = [for worker in arvan_abrak.k8s_worker : worker.networks[0].ip]
+  description = "Public IP addresses of the worker nodes"
 }
