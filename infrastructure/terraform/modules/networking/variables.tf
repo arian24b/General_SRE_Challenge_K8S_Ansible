@@ -20,3 +20,15 @@ variable "dns_servers" {
   type        = list(string)
   default     = ["8.8.8.8", "1.1.1.1"]
 }
+
+variable "dhcp_range" {
+  description = "DHCP range for the network"
+  type        = object({
+    start = string
+    end   = string
+  })
+  default = {
+    start = "10.0.0.10"
+    end   = "10.0.0.100"
+  }
+}

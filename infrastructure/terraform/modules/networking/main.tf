@@ -14,6 +14,7 @@ resource "arvan_network" "k8s_network" {
   enable_gateway = true
   enable_dhcp    = true
   dns_servers    = var.dns_servers
+  dhcp_range     = var.dhcp_range
 }
 
 output "network_id" {
