@@ -1,7 +1,7 @@
 terraform {
   required_providers {
     arvan = {
-      source = "terraform.arvancloud.ir/arvancloud/iaas"
+      source  = "terraform.arvancloud.ir/arvancloud/iaas"
       version = "0.8.1"
     }
   }
@@ -18,12 +18,14 @@ resource "arvan_security_group" "k8s_sg" {
       protocol  = "tcp"
       port_from = 22
       port_to   = 22
+      ip        = "0.0.0.0/0"
     },
     {
       direction = "ingress"
       protocol  = "tcp"
       port_from = 6443
       port_to   = 6443
+      ip        = "0.0.0.0/0"
     },
     {
       direction = "ingress"
@@ -54,6 +56,12 @@ resource "arvan_security_group" "k8s_sg" {
       protocol  = "tcp"
       port_from = 30000
       port_to   = 32767
+      ip        = "0.0.0.0/0"
+    },
+    {
+      direction = "ingress"
+      protocol  = "icmp"
+      ip        = "0.0.0.0/0"
     },
     {
       direction = "egress"

@@ -1,7 +1,7 @@
 terraform {
   required_providers {
     arvan = {
-      source = "terraform.arvancloud.ir/arvancloud/iaas"
+      source  = "terraform.arvancloud.ir/arvancloud/iaas"
       version = "0.8.1"
     }
   }
@@ -27,6 +27,18 @@ locals {
   selected_flavor = [for plan in data.arvan_plans.plans.plans : plan if plan.name == var.flavor][0]
 }
 
+# Floating IPs for public access
+resource "arvan_floating_ip" "master_fip" {
+  region      = var.region
+  description = "Public IP for Kubernetes master node"
+}
+
+resource "arvan_floating_ip" "worker_fip" {
+  count       = var.worker_count
+  region      = var.region
+  description = "Public IP for Kubernetes worker node ${count.index}"
+}
+
 # Master Node
 resource "arvan_abrak" "k8s_master" {
   timeouts {
@@ -35,19 +47,23 @@ resource "arvan_abrak" "k8s_master" {
     delete = "20m"
     read   = "10m"
   }
-  region          = var.region
-  name            = "k8s-master-${var.region}"
-  image_id        = local.ubuntu_image.id
-  flavor_id       = local.selected_flavor.id
-  disk_size       = var.disk_size
-  ssh_key_name    = var.ssh_key_name != "" ? var.ssh_key_name : null
-  enable_ipv4     = true
-  enable_ipv6     = true
+  region       = var.region
+  name         = "k8s-master-${var.region}"
+  image_id     = local.ubuntu_image.id
+  flavor_id    = local.selected_flavor.id
+  disk_size    = var.disk_size
+  ssh_key_name = var.ssh_key_name != "" ? var.ssh_key_name : null
+  enable_ipv4  = true
+  enable_ipv6  = false
+  floating_ip = {
+    floating_ip_id = arvan_floating_ip.master_fip.id
+    network_id     = var.network_id
+  }
   security_groups = [var.security_group_id]
-  networks        = [{
+  networks = [{
     network_id = var.network_id
   }]
-  volumes         = var.volume_ids
+  volumes = var.volume_ids
 }
 
 # Worker Nodes
@@ -59,26 +75,40 @@ resource "arvan_abrak" "k8s_worker" {
     delete = "20m"
     read   = "10m"
   }
-  region          = var.region
-  name            = "k8s-worker-${count.index}-${var.region}"
-  image_id        = local.ubuntu_image.id
-  flavor_id       = local.selected_flavor.id
-  disk_size       = var.disk_size
-  ssh_key_name    = var.ssh_key_name != "" ? var.ssh_key_name : null
-  enable_ipv4     = true
-  enable_ipv6     = true
+  region       = var.region
+  name         = "k8s-worker-${count.index}-${var.region}"
+  image_id     = local.ubuntu_image.id
+  flavor_id    = local.selected_flavor.id
+  disk_size    = var.disk_size
+  ssh_key_name = var.ssh_key_name != "" ? var.ssh_key_name : null
+  enable_ipv4  = true
+  enable_ipv6  = false
+  floating_ip = {
+    floating_ip_id = arvan_floating_ip.worker_fip[count.index].id
+    network_id     = var.network_id
+  }
   security_groups = [var.security_group_id]
-  networks        = [{
+  networks = [{
     network_id = var.network_id
   }]
 }
 
-output "master_ip" {
-  value = arvan_abrak.k8s_master.networks[0].ip
+output "master_private_ip" {
+  value       = arvan_abrak.k8s_master.networks[0].ip
+  description = "Private IP address of the master node"
+}
+
+output "master_public_ip" {
+  value       = arvan_floating_ip.master_fip.address
   description = "Public IP address of the master node"
 }
 
-output "worker_ips" {
-  value = [for worker in arvan_abrak.k8s_worker : worker.networks[0].ip]
+output "worker_private_ips" {
+  value       = [for worker in arvan_abrak.k8s_worker : worker.networks[0].ip]
+  description = "Private IP addresses of the worker nodes"
+}
+
+output "worker_public_ips" {
+  value       = [for fip in arvan_floating_ip.worker_fip : fip.address]
   description = "Public IP addresses of the worker nodes"
 }

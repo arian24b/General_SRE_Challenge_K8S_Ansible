@@ -23,7 +23,7 @@ variable "dns_servers" {
 
 variable "dhcp_range" {
   description = "DHCP range for the network"
-  type        = object({
+  type = object({
     start = string
     end   = string
   })

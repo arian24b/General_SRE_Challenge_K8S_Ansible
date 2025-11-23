@@ -209,8 +209,8 @@ jobs:
           import json, sys
           with open('../terraform/outputs.json') as f:
               data = json.load(f)
-          master_ip = data['master_ip']['value']
-          worker_ips = data['worker_ips']['value']
+          master_ip = data['master_public_ip']['value']
+          worker_ips = data['worker_public_ips']['value']
 
           with open('inventory.ini', 'w') as f:
               f.write('[k8s_master]\n')
@@ -228,9 +228,9 @@ jobs:
           AWS_EC2_METADATA_DISABLED: "true"
         run: |
           cd infrastructure/terraform
-          MASTER_IP=$(terraform output -raw master_ip)
+          MASTER_IP=$(terraform output -raw master_public_ip)
           ssh-keyscan -H $MASTER_IP >> ~/.ssh/known_hosts || true
-          WORKER_IPS=$(terraform output -json worker_ips | jq -r '.[]')
+          WORKER_IPS=$(terraform output -json worker_public_ips | jq -r '.[]')
           for ip in $WORKER_IPS; do
             ssh-keyscan -H $ip >> ~/.ssh/known_hosts || true
           done
@@ -247,7 +247,7 @@ jobs:
           AWS_EC2_METADATA_DISABLED: "true"
         run: |
           mkdir -p ~/.kube
-          MASTER_IP=$(terraform -chdir=infrastructure/terraform output -raw master_ip)
+          MASTER_IP=$(terraform -chdir=infrastructure/terraform output -raw master_public_ip)
           scp -o StrictHostKeyChecking=no root@$MASTER_IP:~/.kube/config ~/.kube/config
           sed -i "s/127.0.0.1/$MASTER_IP/g" ~/.kube/config
           kubectl get nodes

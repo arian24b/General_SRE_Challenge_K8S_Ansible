@@ -8,14 +8,24 @@ output "network_id" {
   value       = module.networking.network_id
 }
 
-output "master_ip" {
-  description = "ID of the master node"
-  value       = module.compute.master_ip
+output "master_private_ip" {
+  description = "Private IP of the master node"
+  value       = module.compute.master_private_ip
 }
 
-output "worker_ips" {
-  description = "IDs of the worker nodes"
-  value       = module.compute.worker_ips
+output "master_public_ip" {
+  description = "Public IP of the master node"
+  value       = module.compute.master_public_ip
+}
+
+output "worker_private_ips" {
+  description = "Private IPs of the worker nodes"
+  value       = module.compute.worker_private_ips
+}
+
+output "worker_public_ips" {
+  description = "Public IPs of the worker nodes"
+  value       = module.compute.worker_public_ips
 }
 
 output "etcd_volume_id" {
