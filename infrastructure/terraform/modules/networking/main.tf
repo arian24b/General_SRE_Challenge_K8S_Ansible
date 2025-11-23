@@ -11,6 +11,7 @@ resource "arvan_network" "k8s_network" {
   name           = var.network_name
   cidr           = var.network_cidr
   region         = var.region
+  description    = "Kubernetes cluster network"
   enable_gateway = true
   enable_dhcp    = true
   dns_servers    = var.dns_servers

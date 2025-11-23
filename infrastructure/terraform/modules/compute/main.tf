@@ -38,6 +38,7 @@ resource "arvan_abrak" "k8s_master" {
   networks        = [{
     network_id = var.network_id
   }]
+  volumes         = var.volume_ids
 }
 
 # Worker Nodes
