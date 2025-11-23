@@ -40,7 +40,7 @@ resource "arvan_abrak" "k8s_master" {
   image_id        = local.ubuntu_image.id
   flavor_id       = local.selected_flavor.id
   disk_size       = var.disk_size
-  server_group_id = ""  # optional
+  ssh_key_name    = var.ssh_key_name != "" ? var.ssh_key_name : null
   enable_ipv4     = true
   enable_ipv6     = true
   security_groups = [var.security_group_id]
@@ -64,7 +64,7 @@ resource "arvan_abrak" "k8s_worker" {
   image_id        = local.ubuntu_image.id
   flavor_id       = local.selected_flavor.id
   disk_size       = var.disk_size
-  server_group_id = ""  # optional
+  ssh_key_name    = var.ssh_key_name != "" ? var.ssh_key_name : null
   enable_ipv4     = true
   enable_ipv6     = true
   security_groups = [var.security_group_id]
@@ -75,10 +75,10 @@ resource "arvan_abrak" "k8s_worker" {
 
 output "master_ip" {
   value = arvan_abrak.k8s_master.id
-  description = "Master node ID (IP address needs to be retrieved from Arvan Cloud console)"
+  description = "ID of the master node (IP address available in ArvanCloud console)"
 }
 
 output "worker_ips" {
   value = arvan_abrak.k8s_worker[*].id
-  description = "Worker node IDs (IP addresses need to be retrieved from Arvan Cloud console)"
+  description = "IDs of the worker nodes (IP addresses available in ArvanCloud console)"
 }

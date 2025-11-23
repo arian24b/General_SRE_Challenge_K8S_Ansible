@@ -1,7 +1,7 @@
 terraform {
   required_providers {
     arvan = {
-      source = "terraform.arvancloud.ir/arvancloud/iaas"
+      source  = "terraform.arvancloud.ir/arvancloud/iaas"
       version = "0.8.1"
     }
   }
@@ -40,21 +40,22 @@ module "security" {
 }
 
 module "storage" {
-  source             = "./modules/storage"
-  region             = var.region
-  etcd_volume_size   = var.etcd_volume_size
+  source               = "./modules/storage"
+  region               = var.region
+  etcd_volume_size     = var.etcd_volume_size
   registry_volume_size = var.registry_volume_size
-  logs_volume_size   = var.logs_volume_size
+  logs_volume_size     = var.logs_volume_size
 }
 
 module "compute" {
-  source           = "./modules/compute"
-  region           = var.region
-  os_image         = var.os_image
-  flavor           = var.flavor
-  disk_size        = var.disk_size
-  worker_count     = var.worker_count
+  source            = "./modules/compute"
+  region            = var.region
+  os_image          = var.os_image
+  flavor            = var.flavor
+  disk_size         = var.disk_size
+  worker_count      = var.worker_count
+  ssh_key_name      = var.ssh_key_name
   security_group_id = module.security.security_group_id
-  volume_ids       = [module.storage.etcd_volume_id, module.storage.registry_volume_id, module.storage.logs_volume_id]
-  network_id       = module.networking.network_id
+  volume_ids        = [module.storage.etcd_volume_id, module.storage.registry_volume_id, module.storage.logs_volume_id]
+  network_id        = module.networking.network_id
 }

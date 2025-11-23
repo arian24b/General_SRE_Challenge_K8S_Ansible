@@ -104,14 +104,15 @@ disk_size            = 25
 etcd_volume_size     = 50
 registry_volume_size = 100
 logs_volume_size     = 50
+ssh_key_name         = "my-ssh-key"  # Optional: SSH key name in ArvanCloud
 ```
 
 ## 📊 Outputs
 
 After deployment, Terraform will output:
 
-- `master_id`: ID of the master node
-- `worker_ids`: List of worker node IDs
+- `master_ip`: ID of the master node (IP available in ArvanCloud console)
+- `worker_ips`: List of worker node IDs (IPs available in ArvanCloud console)
 - `etcd_volume_id`: ID of the etcd volume
 - `registry_volume_id`: ID of the registry volume
 - `logs_volume_id`: ID of the logs volume

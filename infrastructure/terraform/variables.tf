@@ -13,13 +13,19 @@ variable "region" {
 variable "os_image" {
   description = "OS image name (from available distributions)"
   type        = string
-  default     = "22.04"  # Available: 24.04, 22.04, 20.04, etc.
+  default     = "22.04" # Available: 24.04, 22.04, 20.04, etc.
 }
 
 variable "ssh_public_key_path" {
   description = "Path to SSH public key"
   type        = string
   default     = "~/.ssh/id_ed25519"
+}
+
+variable "ssh_key_name" {
+  description = "Name of the SSH key pair in ArvanCloud"
+  type        = string
+  default     = ""
 }
 
 variable "worker_count" {
@@ -31,7 +37,7 @@ variable "worker_count" {
 variable "flavor" {
   description = "Instance flavor name (from available plans)"
   type        = string
-  default     = "eco-small1"  # Available: eco-small1, g5-small1, etc.
+  default     = "eco-small1" # Available: eco-small1, g5-small1, etc.
 }
 
 variable "disk_size" {

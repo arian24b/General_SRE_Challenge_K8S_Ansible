@@ -19,5 +19,5 @@ resource "arvan_network" "k8s_network" {
 }
 
 output "network_id" {
-  value = arvan_network.k8s_network.id
+  value = arvan_network.k8s_network.network_id
 }

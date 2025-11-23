@@ -41,3 +41,9 @@ variable "network_id" {
   description = "Network ID"
   type        = string
 }
+
+variable "ssh_key_name" {
+  description = "Name of the SSH key pair in ArvanCloud"
+  type        = string
+  default     = ""
+}

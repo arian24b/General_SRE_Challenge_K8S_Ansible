@@ -9,12 +9,12 @@ output "network_id" {
 }
 
 output "master_ip" {
-  description = "IP address of the master node"
+  description = "ID of the master node"
   value       = module.compute.master_ip
 }
 
 output "worker_ips" {
-  description = "IP addresses of the worker nodes"
+  description = "IDs of the worker nodes"
   value       = module.compute.worker_ips
 }
 
