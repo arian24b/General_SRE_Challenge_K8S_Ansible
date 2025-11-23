@@ -14,3 +14,9 @@ variable "region" {
   description = "ArvanCloud region"
   type        = string
 }
+
+variable "dns_servers" {
+  description = "DNS servers for the network"
+  type        = list(string)
+  default     = ["8.8.8.8", "1.1.1.1"]
+}
