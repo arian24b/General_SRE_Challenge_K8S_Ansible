@@ -12,3 +12,7 @@ disk_size            = 25
 etcd_volume_size     = 50
 registry_volume_size = 100
 logs_volume_size     = 50
+
+# Public IP addresses (update these with your actual instance IPs)
+master_public_ip     = "188.121.121.230"
+worker_public_ips    = ["188.213.197.144", "188.213.199.84"]

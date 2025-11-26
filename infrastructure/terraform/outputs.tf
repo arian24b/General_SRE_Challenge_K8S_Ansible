@@ -10,7 +10,7 @@ output "master_private_ip" {
 
 output "master_public_ip" {
   description = "Public IP of the master node"
-  value       = "188.121.121.230"
+  value       = var.master_public_ip
 }
 
 output "worker_private_ips" {
@@ -20,7 +20,7 @@ output "worker_private_ips" {
 
 output "worker_public_ips" {
   description = "Public IPs of the worker nodes"
-  value       = ["188.213.197.144", "188.213.199.84"]
+  value       = var.worker_public_ips
 }
 
 output "etcd_volume_id" {
