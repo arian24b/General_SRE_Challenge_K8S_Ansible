@@ -79,11 +79,11 @@ variable "network_cidr" {
 variable "master_public_ip" {
   description = "Public IP address of the master node"
   type        = string
-  default     = "188.121.121.230"
+  default     = "194.5.206.210"
 }
 
 variable "worker_public_ips" {
   description = "Public IP addresses of the worker nodes"
   type        = list(string)
-  default     = ["188.213.197.144", "188.213.199.84"]
+  default     = ["194.5.206.23", "194.5.206.212"]
 }
