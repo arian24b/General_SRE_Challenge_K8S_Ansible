@@ -5,9 +5,9 @@ variable "arvan_api_key" {
 }
 
 variable "region" {
-  description = "ArvanCloud region (ir-thr-c2)"
+  description = "ArvanCloud region (eu-west1-a)"
   type        = string
-  default     = "ir-thr-c2"
+  default     = "eu-west1-a"
 }
 
 variable "os_image" {

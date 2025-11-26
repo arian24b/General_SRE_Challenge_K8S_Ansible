@@ -3,7 +3,7 @@
 
 arvan_api_base: "https://api.arvancloud.ir/iaas/v1"
 arvan_api_key: "{{ lookup('env', 'ARVAN_API_KEY') }}"
-region: "ir-thr-c2" # Tehran region - adjust based on your needs
+region: "eu-west1-a" # Tehran region - adjust based on your needs
 
 # Network configuration
 network_name: "k8s-private-network"
