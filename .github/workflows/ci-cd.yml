@@ -144,7 +144,7 @@ jobs:
   deploy-infrastructure:
     name: Deploy Infrastructure
     needs: build-and-push
-    if: github.event.inputs.deploy_infrastructure == true
+    if: github.event.inputs.deploy_infrastructure == 'true'
     runs-on: ubuntu-latest
     environment: production
     steps:
