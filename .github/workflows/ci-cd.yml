@@ -144,7 +144,7 @@ jobs:
   deploy-infrastructure:
     name: Deploy Infrastructure
     needs: build-and-push
-    if: github.event.inputs.deploy_infrastructure == 'true'
+    if: github.event.inputs.deploy_infrastructure == true
     runs-on: ubuntu-latest
     environment: production
     steps:
@@ -340,7 +340,7 @@ jobs:
           helm upgrade --install api . \
             --namespace application \
             --set image.repository=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }} \
-            --set image.tag=${{ needs.build-and-push.outputs.image-tag }} \
+            --set image.tag=latest \
             --set database.host=postgres-service \
             --set database.port=5432 \
             --wait --timeout 5m

@@ -38,6 +38,7 @@ MANIFEST
 tfplan
 *.tfvars
 !terraform.tfvars.example
+outputs.json
 
 # Ansible
 *.retry
