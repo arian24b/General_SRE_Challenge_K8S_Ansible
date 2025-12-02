@@ -28,6 +28,12 @@ variable "ssh_key_name" {
   default     = ""
 }
 
+variable "ssh_public_key" {
+  description = "SSH public key content to inject via cloud-init (used when ssh_key_name is not available in ArvanCloud)"
+  type        = string
+  default     = ""
+}
+
 variable "worker_count" {
   description = "Number of worker nodes to create"
   type        = number
@@ -74,16 +80,4 @@ variable "network_cidr" {
   description = "CIDR block for the network"
   type        = string
   default     = "10.0.0.0/16"
-}
-
-variable "master_public_ip" {
-  description = "Public IP address of the master node"
-  type        = string
-  default     = "194.5.206.210"
-}
-
-variable "worker_public_ips" {
-  description = "Public IP addresses of the worker nodes"
-  type        = list(string)
-  default     = ["194.5.206.23", "194.5.206.212"]
 }

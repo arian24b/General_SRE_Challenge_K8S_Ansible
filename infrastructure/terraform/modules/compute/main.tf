@@ -25,6 +25,11 @@ locals {
 # Find the flavor
 locals {
   selected_flavor = [for plan in data.arvan_plans.plans.plans : plan if plan.name == var.flavor][0]
+  
+  # Cloud-init script to inject SSH public key
+  cloud_init_script = var.ssh_public_key != "" ? templatefile("${path.module}/cloud-init.yaml.tftpl", {
+    ssh_public_key = var.ssh_public_key
+  }) : null
 }
 
 # Master Node
@@ -41,6 +46,7 @@ resource "arvan_abrak" "k8s_master" {
   flavor_id    = local.selected_flavor.id
   disk_size    = var.disk_size
   ssh_key_name = var.ssh_key_name != "" ? var.ssh_key_name : null
+  init_script  = local.cloud_init_script
   enable_ipv4  = true
   enable_ipv6  = true
   security_groups = []
@@ -65,6 +71,7 @@ resource "arvan_abrak" "k8s_worker" {
   flavor_id    = local.selected_flavor.id
   disk_size    = var.disk_size
   ssh_key_name = var.ssh_key_name != "" ? var.ssh_key_name : null
+  init_script  = local.cloud_init_script
   enable_ipv4  = true
   enable_ipv6  = true
   security_groups = []
@@ -73,13 +80,49 @@ resource "arvan_abrak" "k8s_worker" {
   }]
 }
 
+# Data source to get all abraks with their public IPs after creation
+data "arvan_abraks" "all" {
+  region = var.region
+  depends_on = [
+    arvan_abrak.k8s_master,
+    arvan_abrak.k8s_worker
+  ]
+}
+
+# Local values to extract public IPs from the data source
+locals {
+  # Find master instance by ID and extract public IP
+  master_instance = [for inst in data.arvan_abraks.all.instances : inst if inst.id == arvan_abrak.k8s_master.id][0]
+  master_public_ip = try(
+    [for network_name, addresses in local.master_instance.addresses : 
+      [for addr in addresses : addr.address if addr.is_public == true][0]
+    ][0],
+    arvan_abrak.k8s_master.networks[0].ip  # Fallback to private IP if no public found
+  )
+  
+  # Find worker instances by ID and extract public IPs
+  worker_instances = [
+    for worker in arvan_abrak.k8s_worker : 
+      [for inst in data.arvan_abraks.all.instances : inst if inst.id == worker.id][0]
+  ]
+  worker_public_ips = [
+    for inst in local.worker_instances :
+      try(
+        [for network_name, addresses in inst.addresses : 
+          [for addr in addresses : addr.address if addr.is_public == true][0]
+        ][0],
+        inst.addresses[keys(inst.addresses)[0]][0].address  # Fallback
+      )
+  ]
+}
+
 output "master_private_ip" {
   value       = arvan_abrak.k8s_master.networks[0].ip
   description = "Private IP address of the master node"
 }
 
 output "master_public_ip" {
-  value       = arvan_abrak.k8s_master.networks[0].ip
+  value       = local.master_public_ip
   description = "Public IP address of the master node"
 }
 
@@ -89,7 +132,7 @@ output "worker_private_ips" {
 }
 
 output "worker_public_ips" {
-  value       = [for worker in arvan_abrak.k8s_worker : worker.networks[0].ip]
+  value       = local.worker_public_ips
   description = "Public IP addresses of the worker nodes"
 }
 

@@ -42,3 +42,9 @@ variable "ssh_key_name" {
   type        = string
   default     = ""
 }
+
+variable "ssh_public_key" {
+  description = "SSH public key content to inject via cloud-init (used when ssh_key_name is not available)"
+  type        = string
+  default     = ""
+}

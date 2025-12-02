@@ -10,7 +10,7 @@ output "master_private_ip" {
 
 output "master_public_ip" {
   description = "Public IP of the master node"
-  value       = var.master_public_ip
+  value       = module.compute.master_public_ip
 }
 
 output "worker_private_ips" {
@@ -20,7 +20,7 @@ output "worker_private_ips" {
 
 output "worker_public_ips" {
   description = "Public IPs of the worker nodes"
-  value       = var.worker_public_ips
+  value       = module.compute.worker_public_ips
 }
 
 output "etcd_volume_id" {
@@ -36,4 +36,14 @@ output "registry_volume_id" {
 output "logs_volume_id" {
   description = "ID of the logs volume"
   value       = module.storage.logs_volume_id
+}
+
+output "master_id" {
+  description = "ID of the master node"
+  value       = module.compute.master_id
+}
+
+output "worker_ids" {
+  description = "IDs of the worker nodes"
+  value       = module.compute.worker_ids
 }

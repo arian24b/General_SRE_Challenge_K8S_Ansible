@@ -165,6 +165,8 @@ jobs:
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H github.com >> ~/.ssh/known_hosts || true
+          # Generate public key from private key for cloud-init injection
+          ssh-keygen -y -f ~/.ssh/id_ed25519 > ~/.ssh/id_ed25519.pub
 
       - name: Terraform Init
         env:
@@ -182,8 +184,10 @@ jobs:
           AWS_EC2_METADATA_DISABLED: "true"
         run: |
           cd infrastructure/terraform
+          SSH_PUBLIC_KEY=$(cat ~/.ssh/id_ed25519.pub)
           terraform plan \
             -var="arvan_api_key=${{ secrets.ARVAN_API_KEY }}" \
+            -var="ssh_public_key=${SSH_PUBLIC_KEY}" \
             -out=tfplan
 
       - name: Terraform Apply
@@ -202,29 +206,40 @@ jobs:
           AWS_EC2_METADATA_DISABLED: "true"
         run: |
           cd infrastructure/terraform
+          
+          # Get real public IPs from terraform outputs
           MASTER_IP=$(terraform output -raw master_public_ip)
-          WORKER_IPS=$(terraform output -json worker_public_ips | jq -r '.[]')
+          echo "Master public IP: $MASTER_IP"
+          
+          # Handle worker IPs - could be array or empty
+          WORKER_IPS=$(terraform output -json worker_public_ips 2>/dev/null | jq -r '.[]' 2>/dev/null || echo "")
+          echo "Worker public IPs: $WORKER_IPS"
 
-          echo "Waiting for master node ($MASTER_IP) to be reachable..."
-          for i in {1..30}; do
-            if ping -c 1 -W 2 $MASTER_IP &> /dev/null; then
-              echo "Master node is reachable!"
-              break
-            fi
-            echo "Attempt $i/30: Master node not reachable yet, waiting..."
-            sleep 10
-          done
-
-          for WORKER_IP in $WORKER_IPS; do
-            echo "Waiting for worker node ($WORKER_IP) to be reachable..."
-            for i in {1..30}; do
-              if ping -c 1 -W 2 $WORKER_IP &> /dev/null; then
-                echo "Worker node $WORKER_IP is reachable!"
-                break
+          # Function to wait for a server to be reachable via SSH
+          wait_for_ssh() {
+            local ip=$1
+            local name=$2
+            echo "Waiting for $name ($ip) to be reachable via SSH..."
+            for i in {1..60}; do
+              if ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o BatchMode=yes root@$ip "echo 'SSH connection successful'" 2>/dev/null; then
+                echo "$name is reachable via SSH!"
+                return 0
               fi
-              echo "Attempt $i/30: Worker node not reachable yet, waiting..."
+              echo "Attempt $i/60: $name not reachable yet, waiting..."
               sleep 10
             done
+            echo "WARNING: $name may not be fully ready after 10 minutes"
+            return 1
+          }
+
+          # Wait for master node
+          wait_for_ssh "$MASTER_IP" "Master node"
+
+          # Wait for each worker node
+          for WORKER_IP in $WORKER_IPS; do
+            if [ -n "$WORKER_IP" ]; then
+              wait_for_ssh "$WORKER_IP" "Worker node"
+            fi
           done
 
           echo "All servers are reachable. Waiting additional 30 seconds for system initialization..."
@@ -237,23 +252,39 @@ jobs:
           AWS_EC2_METADATA_DISABLED: "true"
         run: |
           cd infrastructure/terraform
+          
+          # Get fresh outputs from Terraform (these are now real IPs from the arvan_abraks data source)
           terraform output -json > outputs.json
+          
+          echo "=== Terraform Outputs ==="
+          cat outputs.json
+          echo "========================="
+          
           cd ../ansible
           # Generate inventory from Terraform outputs
           python3 -c "
           import json, sys
           with open('../terraform/outputs.json') as f:
               data = json.load(f)
+          
+          # Get real public IPs from terraform outputs
           master_ip = data['master_public_ip']['value']
-          worker_ips = data['worker_public_ips']['value']
-
+          worker_ips = data.get('worker_public_ips', {}).get('value', [])
+          
+          print(f'Master IP: {master_ip}')
+          print(f'Worker IPs: {worker_ips}')
+          
           with open('inventory.ini', 'w') as f:
               f.write('[k8s_master]\n')
-              f.write(f'master ansible_host={master_ip} ansible_user=root\n\n')
+              f.write(f'master ansible_host={master_ip} ansible_user=root ansible_ssh_private_key_file=~/.ssh/id_ed25519\n\n')
               f.write('[k8s_workers]\n')
               for i, ip in enumerate(worker_ips):
-                  f.write(f'worker{i} ansible_host={ip} ansible_user=root\n')
+                  f.write(f'worker{i} ansible_host={ip} ansible_user=root ansible_ssh_private_key_file=~/.ssh/id_ed25519\n')
               f.write('\n[k8s:children]\nk8s_master\nk8s_workers\n')
+          
+          print('Generated inventory.ini:')
+          with open('inventory.ini') as f:
+              print(f.read())
           "
 
       - name: Add hosts to known_hosts
@@ -263,11 +294,19 @@ jobs:
           AWS_EC2_METADATA_DISABLED: "true"
         run: |
           cd infrastructure/terraform
+          
+          # Get real public IPs from terraform outputs
           MASTER_IP=$(terraform output -raw master_public_ip)
-          ssh-keyscan -H $MASTER_IP >> ~/.ssh/known_hosts || true
-          WORKER_IPS=$(terraform output -json worker_public_ips | jq -r '.[]')
+          echo "Adding master ($MASTER_IP) to known_hosts"
+          ssh-keyscan -H $MASTER_IP >> ~/.ssh/known_hosts 2>/dev/null || true
+          
+          # Get worker IPs
+          WORKER_IPS=$(terraform output -json worker_public_ips 2>/dev/null | jq -r '.[]' 2>/dev/null || echo "")
           for ip in $WORKER_IPS; do
-            ssh-keyscan -H $ip >> ~/.ssh/known_hosts || true
+            if [ -n "$ip" ]; then
+              echo "Adding worker ($ip) to known_hosts"
+              ssh-keyscan -H $ip >> ~/.ssh/known_hosts 2>/dev/null || true
+            fi
           done
 
       - name: Deploy Kubernetes Cluster

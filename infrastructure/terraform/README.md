@@ -91,6 +91,8 @@ This Terraform configuration creates a complete Kubernetes cluster infrastructur
 | `etcd_volume_size` | etcd volume size (GB) | `50` |
 | `registry_volume_size` | Registry volume size (GB) | `100` |
 | `logs_volume_size` | Logs volume size (GB) | `50` |
+| `ssh_key_name` | SSH key name in ArvanCloud (optional) | `""` |
+| `ssh_public_key` | SSH public key for cloud-init injection | `""` |
 
 ### Example terraform.tfvars
 
@@ -105,29 +107,40 @@ etcd_volume_size     = 50
 registry_volume_size = 100
 logs_volume_size     = 50
 ssh_key_name         = "my-ssh-key"  # Optional: SSH key name in ArvanCloud
+ssh_public_key       = ""  # Optional: SSH public key content for cloud-init
 ```
 
 ## 📊 Outputs
 
 After deployment, Terraform will output:
 
-- `master_ip`: ID of the master node (IP available in ArvanCloud console)
-- `worker_ips`: List of worker node IDs (IPs available in ArvanCloud console)
+- `master_public_ip`: Public IP address of the master node (dynamically retrieved)
+- `master_private_ip`: Private IP address of the master node
+- `worker_public_ips`: List of public IP addresses of worker nodes (dynamically retrieved)
+- `worker_private_ips`: List of private IP addresses of worker nodes
+- `master_id`: ID of the master node
+- `worker_ids`: IDs of the worker nodes
 - `etcd_volume_id`: ID of the etcd volume
 - `registry_volume_id`: ID of the registry volume
 - `logs_volume_id`: ID of the logs volume
-- `master_status`: Status of the master node
-- `worker_statuses`: Statuses of the worker nodes
 
-## 🔍 Getting Server Information
+## 🔑 SSH Key Configuration
 
-To get detailed server information including IPs, use the ArvanCloud web console or API:
+There are two ways to configure SSH access to the servers:
 
-```bash
-# Check server details via ArvanCloud API
-curl -H "Authorization: Bearer YOUR_API_KEY" \
-     "https://api.arvancloud.ir/iaas/v1/servers/$(terraform output -raw master_id)"
+### Option 1: ArvanCloud SSH Key (Recommended)
+If you have an SSH key pre-created in ArvanCloud:
+```hcl
+ssh_key_name = "my-arvancloud-key"
 ```
+
+### Option 2: Cloud-Init Injection
+If you don't have an SSH key in ArvanCloud, provide the public key content:
+```hcl
+ssh_public_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... user@host"
+```
+
+The SSH public key will be injected via cloud-init during server creation.
 
 ### Check All Outputs
 ```bash

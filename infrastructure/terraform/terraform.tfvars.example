@@ -2,6 +2,7 @@ arvan_api_key        = "apikey your-36-char-api-key"
 region               = "eu-west1-a"
 os_image             = "22.04"  # Available: 24.04, 22.04, 20.04, 12, 11, 10
 ssh_public_key_path  = "~/.ssh/id_ed25519"
+ssh_key_name         = "my-ssh-key"  # Name of your SSH key in ArvanCloud
 
 # Instance configuration
 worker_count         = 2
@@ -12,7 +13,3 @@ disk_size            = 25
 etcd_volume_size     = 50
 registry_volume_size = 100
 logs_volume_size     = 50
-
-# Public IP addresses (update these with your actual instance IPs)
-master_public_ip     = "188.121.121.230"
-worker_public_ips    = ["188.213.197.144", "188.213.199.84"]
