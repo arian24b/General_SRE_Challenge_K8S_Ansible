@@ -25,7 +25,7 @@ locals {
 # Find the flavor
 locals {
   selected_flavor = [for plan in data.arvan_plans.plans.plans : plan if plan.name == var.flavor][0]
-  
+
   # Cloud-init script to inject SSH public key
   cloud_init_script = var.ssh_public_key != "" ? templatefile("${path.module}/cloud-init.yaml.tftpl", {
     ssh_public_key = var.ssh_public_key
@@ -54,6 +54,13 @@ resource "arvan_abrak" "k8s_master" {
     network_id = var.network_id
   }]
   volumes = var.volume_ids
+
+  # Workaround for ArvanCloud provider bug with port_security_enabled
+  lifecycle {
+    ignore_changes = [
+      networks[0].port_security_enabled
+    ]
+  }
 }
 
 # Worker Nodes
@@ -78,6 +85,13 @@ resource "arvan_abrak" "k8s_worker" {
   networks = [{
     network_id = var.network_id
   }]
+
+  # Workaround for ArvanCloud provider bug with port_security_enabled
+  lifecycle {
+    ignore_changes = [
+      networks[0].port_security_enabled
+    ]
+  }
 }
 
 # Data source to get all abraks with their public IPs after creation
@@ -94,21 +108,21 @@ locals {
   # Find master instance by ID and extract public IP
   master_instance = [for inst in data.arvan_abraks.all.instances : inst if inst.id == arvan_abrak.k8s_master.id][0]
   master_public_ip = try(
-    [for network_name, addresses in local.master_instance.addresses : 
+    [for network_name, addresses in local.master_instance.addresses :
       [for addr in addresses : addr.address if addr.is_public == true][0]
     ][0],
     arvan_abrak.k8s_master.networks[0].ip  # Fallback to private IP if no public found
   )
-  
+
   # Find worker instances by ID and extract public IPs
   worker_instances = [
-    for worker in arvan_abrak.k8s_worker : 
+    for worker in arvan_abrak.k8s_worker :
       [for inst in data.arvan_abraks.all.instances : inst if inst.id == worker.id][0]
   ]
   worker_public_ips = [
     for inst in local.worker_instances :
       try(
-        [for network_name, addresses in inst.addresses : 
+        [for network_name, addresses in inst.addresses :
           [for addr in addresses : addr.address if addr.is_public == true][0]
         ][0],
         inst.addresses[keys(inst.addresses)[0]][0].address  # Fallback
