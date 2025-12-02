@@ -3,6 +3,11 @@ output "network_id" {
   value       = module.networking.network_id
 }
 
+output "region" {
+  description = "ArvanCloud region"
+  value       = var.region
+}
+
 output "master_private_ip" {
   description = "Private IP of the master node"
   value       = module.compute.master_private_ip

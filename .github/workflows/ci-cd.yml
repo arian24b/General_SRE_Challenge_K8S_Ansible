@@ -199,20 +199,68 @@ jobs:
           cd infrastructure/terraform
           terraform apply -auto-approve tfplan
 
-      - name: Wait for servers to be reachable
+      - name: Get Public IPs from ArvanCloud API
         env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.ARVAN_S3_ACCESS_KEY }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.ARVAN_S3_SECRET_KEY }}
-          AWS_EC2_METADATA_DISABLED: "true"
+          ARVAN_API_KEY: ${{ secrets.ARVAN_API_KEY }}
         run: |
           cd infrastructure/terraform
-          
-          # Get real public IPs from terraform outputs
-          MASTER_IP=$(terraform output -raw master_public_ip)
+
+          # Get server IDs from terraform
+          MASTER_ID=$(terraform output -raw master_id)
+          WORKER_IDS=$(terraform output -json worker_ids | jq -r '.[]')
+          REGION=$(terraform output -raw region 2>/dev/null || echo "ir-thr-c2")
+
+          echo "Master ID: $MASTER_ID"
+          echo "Worker IDs: $WORKER_IDS"
+
+          # Function to get public IP from ArvanCloud API
+          get_public_ip() {
+            local server_id=$1
+            local response=$(curl -s -H "Authorization: $ARVAN_API_KEY" \
+              "https://napi.arvancloud.ir/ecc/v1/regions/${REGION}/servers/${server_id}")
+
+            # Extract public IPv4 address
+            local public_ip=$(echo "$response" | jq -r '.data.addresses | to_entries[] | .value[] | select(.version == "4" and .is_public == true) | .addr' | head -1)
+
+            if [ -z "$public_ip" ] || [ "$public_ip" == "null" ]; then
+              # Fallback: try to get any public address
+              public_ip=$(echo "$response" | jq -r '.data.addresses | to_entries[] | .value[] | select(.is_public == true) | .addr' | head -1)
+            fi
+
+            echo "$public_ip"
+          }
+
+          # Get master public IP
+          MASTER_PUBLIC_IP=$(get_public_ip "$MASTER_ID")
+          echo "Master Public IP: $MASTER_PUBLIC_IP"
+
+          # Get worker public IPs
+          WORKER_PUBLIC_IPS=""
+          for worker_id in $WORKER_IDS; do
+            worker_ip=$(get_public_ip "$worker_id")
+            echo "Worker $worker_id Public IP: $worker_ip"
+            if [ -n "$WORKER_PUBLIC_IPS" ]; then
+              WORKER_PUBLIC_IPS="$WORKER_PUBLIC_IPS,$worker_ip"
+            else
+              WORKER_PUBLIC_IPS="$worker_ip"
+            fi
+          done
+
+          # Save IPs to files for later steps
+          echo "$MASTER_PUBLIC_IP" > /tmp/master_public_ip
+          echo "$WORKER_PUBLIC_IPS" > /tmp/worker_public_ips
+
+          echo "=== Public IPs ==="
+          echo "Master: $MASTER_PUBLIC_IP"
+          echo "Workers: $WORKER_PUBLIC_IPS"
+
+      - name: Wait for servers to be reachable
+        run: |
+          # Read IPs from files
+          MASTER_IP=$(cat /tmp/master_public_ip)
+          WORKER_IPS=$(cat /tmp/worker_public_ips | tr ',' '\n')
+
           echo "Master public IP: $MASTER_IP"
-          
-          # Handle worker IPs - could be array or empty
-          WORKER_IPS=$(terraform output -json worker_public_ips 2>/dev/null | jq -r '.[]' 2>/dev/null || echo "")
           echo "Worker public IPs: $WORKER_IPS"
 
           # Function to wait for a server to be reachable via SSH
@@ -246,62 +294,50 @@ jobs:
           sleep 30
 
       - name: Generate Ansible Inventory
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.ARVAN_S3_ACCESS_KEY }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.ARVAN_S3_SECRET_KEY }}
-          AWS_EC2_METADATA_DISABLED: "true"
         run: |
-          cd infrastructure/terraform
-          
-          # Get fresh outputs from Terraform (these are now real IPs from the arvan_abraks data source)
-          terraform output -json > outputs.json
-          
-          echo "=== Terraform Outputs ==="
-          cat outputs.json
-          echo "========================="
-          
-          cd ../ansible
-          # Generate inventory from Terraform outputs
-          python3 -c "
-          import json, sys
-          with open('../terraform/outputs.json') as f:
-              data = json.load(f)
-          
-          # Get real public IPs from terraform outputs
-          master_ip = data['master_public_ip']['value']
-          worker_ips = data.get('worker_public_ips', {}).get('value', [])
-          
-          print(f'Master IP: {master_ip}')
-          print(f'Worker IPs: {worker_ips}')
-          
-          with open('inventory.ini', 'w') as f:
-              f.write('[k8s_master]\n')
-              f.write(f'master ansible_host={master_ip} ansible_user=root ansible_ssh_private_key_file=~/.ssh/id_ed25519\n\n')
-              f.write('[k8s_workers]\n')
-              for i, ip in enumerate(worker_ips):
-                  f.write(f'worker{i} ansible_host={ip} ansible_user=root ansible_ssh_private_key_file=~/.ssh/id_ed25519\n')
-              f.write('\n[k8s:children]\nk8s_master\nk8s_workers\n')
-          
-          print('Generated inventory.ini:')
-          with open('inventory.ini') as f:
-              print(f.read())
-          "
+          # Read IPs from files
+          MASTER_IP=$(cat /tmp/master_public_ip)
+          WORKER_IPS=$(cat /tmp/worker_public_ips)
+
+          echo "=== Generating Ansible Inventory ==="
+          echo "Master IP: $MASTER_IP"
+          echo "Worker IPs: $WORKER_IPS"
+
+          cd infrastructure/ansible
+
+          # Generate inventory file
+          cat > inventory.ini << EOF
+          [k8s_master]
+          master ansible_host=${MASTER_IP} ansible_user=root ansible_ssh_private_key_file=~/.ssh/id_ed25519
+
+          [k8s_workers]
+          EOF
+
+          # Add worker entries
+          IFS=',' read -ra WORKER_ARRAY <<< "$WORKER_IPS"
+          for i in "${!WORKER_ARRAY[@]}"; do
+            echo "worker${i} ansible_host=${WORKER_ARRAY[$i]} ansible_user=root ansible_ssh_private_key_file=~/.ssh/id_ed25519" >> inventory.ini
+          done
+
+          cat >> inventory.ini << EOF
+
+          [k8s:children]
+          k8s_master
+          k8s_workers
+          EOF
+
+          echo "=== Generated inventory.ini ==="
+          cat inventory.ini
 
       - name: Add hosts to known_hosts
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.ARVAN_S3_ACCESS_KEY }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.ARVAN_S3_SECRET_KEY }}
-          AWS_EC2_METADATA_DISABLED: "true"
         run: |
-          cd infrastructure/terraform
-          
-          # Get real public IPs from terraform outputs
-          MASTER_IP=$(terraform output -raw master_public_ip)
+          # Read IPs from files
+          MASTER_IP=$(cat /tmp/master_public_ip)
+          WORKER_IPS=$(cat /tmp/worker_public_ips | tr ',' '\n')
+
           echo "Adding master ($MASTER_IP) to known_hosts"
           ssh-keyscan -H $MASTER_IP >> ~/.ssh/known_hosts 2>/dev/null || true
-          
-          # Get worker IPs
-          WORKER_IPS=$(terraform output -json worker_public_ips 2>/dev/null | jq -r '.[]' 2>/dev/null || echo "")
+
           for ip in $WORKER_IPS; do
             if [ -n "$ip" ]; then
               echo "Adding worker ($ip) to known_hosts"
@@ -315,13 +351,9 @@ jobs:
           ansible-playbook -i inventory.ini setup-cluster.yml
 
       - name: Setup kubectl
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.ARVAN_S3_ACCESS_KEY }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.ARVAN_S3_SECRET_KEY }}
-          AWS_EC2_METADATA_DISABLED: "true"
         run: |
           mkdir -p ~/.kube
-          MASTER_IP=$(terraform -chdir=infrastructure/terraform output -raw master_public_ip)
+          MASTER_IP=$(cat /tmp/master_public_ip)
           scp -o StrictHostKeyChecking=no root@$MASTER_IP:~/.kube/config ~/.kube/config
           sed -i "s/127.0.0.1/$MASTER_IP/g" ~/.kube/config
           kubectl get nodes
