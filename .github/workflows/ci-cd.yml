@@ -231,29 +231,88 @@ jobs:
             echo "$public_ip"
           }
 
-          # Get master public IP
+          # Get master public IP and password
           MASTER_PUBLIC_IP=$(get_public_ip "$MASTER_ID")
+          MASTER_PASSWORD=$(terraform state show module.compute.arvan_abrak.k8s_master | grep 'password' | awk -F'"' '{print $2}')
           echo "Master Public IP: $MASTER_PUBLIC_IP"
 
-          # Get worker public IPs
+          # Get worker public IPs and passwords
           WORKER_PUBLIC_IPS=""
+          WORKER_PASSWORDS=""
+          worker_index=0
           for worker_id in $WORKER_IDS; do
             worker_ip=$(get_public_ip "$worker_id")
-            echo "Worker $worker_id Public IP: $worker_ip"
+            worker_password=$(terraform state show "module.compute.arvan_abrak.k8s_worker[$worker_index]" | grep 'password' | awk -F'"' '{print $2}')
+            echo "Worker $worker_index Public IP: $worker_ip"
+
             if [ -n "$WORKER_PUBLIC_IPS" ]; then
               WORKER_PUBLIC_IPS="$WORKER_PUBLIC_IPS,$worker_ip"
+              WORKER_PASSWORDS="$WORKER_PASSWORDS,$worker_password"
             else
               WORKER_PUBLIC_IPS="$worker_ip"
+              WORKER_PASSWORDS="$worker_password"
             fi
+            worker_index=$((worker_index + 1))
           done
 
-          # Save IPs to files for later steps
+          # Save IPs and passwords to files for later steps
           echo "$MASTER_PUBLIC_IP" > /tmp/master_public_ip
+          echo "$MASTER_PASSWORD" > /tmp/master_password
           echo "$WORKER_PUBLIC_IPS" > /tmp/worker_public_ips
+          echo "$WORKER_PASSWORDS" > /tmp/worker_passwords
 
           echo "=== Public IPs ==="
           echo "Master: $MASTER_PUBLIC_IP"
           echo "Workers: $WORKER_PUBLIC_IPS"
+
+      - name: Install sshpass and inject SSH keys
+        run: |
+          # Install sshpass for password-based SSH
+          sudo apt-get update && sudo apt-get install -y sshpass
+
+          # Read IPs and passwords
+          MASTER_IP=$(cat /tmp/master_public_ip)
+          MASTER_PASSWORD=$(cat /tmp/master_password)
+          WORKER_IPS=$(cat /tmp/worker_public_ips | tr ',' '\n')
+          WORKER_PASSWORDS=$(cat /tmp/worker_passwords | tr ',' '\n')
+
+          SSH_PUBLIC_KEY=$(cat ~/.ssh/id_ed25519.pub)
+
+          # Function to inject SSH key using sshpass
+          inject_ssh_key() {
+            local ip=$1
+            local password=$2
+            local name=$3
+
+            echo "Injecting SSH key to $name ($ip)..."
+
+            # Wait for SSH to be available
+            for i in {1..30}; do
+              if sshpass -p "$password" ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@$ip "echo 'connected'" 2>/dev/null; then
+                break
+              fi
+              echo "Attempt $i/30: Waiting for SSH on $name..."
+              sleep 10
+            done
+
+            # Inject SSH key
+            sshpass -p "$password" ssh -o StrictHostKeyChecking=no root@$ip "mkdir -p ~/.ssh && chmod 700 ~/.ssh && echo '$SSH_PUBLIC_KEY' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys && echo 'SSH key injected successfully'"
+          }
+
+          # Inject SSH key to master
+          inject_ssh_key "$MASTER_IP" "$MASTER_PASSWORD" "Master node"
+
+          # Inject SSH key to workers
+          IFS=$'\n' read -ra WORKER_IP_ARRAY <<< "$WORKER_IPS"
+          IFS=$'\n' read -ra WORKER_PASS_ARRAY <<< "$WORKER_PASSWORDS"
+
+          for i in "${!WORKER_IP_ARRAY[@]}"; do
+            if [ -n "${WORKER_IP_ARRAY[$i]}" ]; then
+              inject_ssh_key "${WORKER_IP_ARRAY[$i]}" "${WORKER_PASS_ARRAY[$i]}" "Worker $i"
+            fi
+          done
+
+          echo "SSH keys injected to all servers"
 
       - name: Wait for servers to be reachable
         run: |
