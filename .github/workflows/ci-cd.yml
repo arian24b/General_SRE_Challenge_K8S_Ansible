@@ -353,6 +353,47 @@ jobs:
             fi
           done
 
+      - name: Download Kubernetes packages for offline install
+        run: |
+          # Download GPG key and packages from CI runner (not blocked)
+          mkdir -p /tmp/k8s-offline
+
+          # Download GPG key
+          curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.32/deb/Release.key -o /tmp/k8s-offline/kubernetes-release.key
+
+          # Create a script to setup repo with the key
+          cat > /tmp/k8s-offline/setup-k8s-repo.sh << 'EOF'
+          #!/bin/bash
+          set -e
+          mkdir -p /etc/apt/keyrings
+          gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg < /tmp/kubernetes-release.key
+          echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.32/deb/ /' > /etc/apt/sources.list.d/kubernetes.list
+          apt-get update
+          apt-get install -y kubelet kubeadm kubectl
+          apt-mark hold kubelet kubeadm kubectl
+          systemctl enable kubelet
+          EOF
+          chmod +x /tmp/k8s-offline/setup-k8s-repo.sh
+
+      - name: Copy Kubernetes files to servers
+        run: |
+          MASTER_IP=$(cat /tmp/master_public_ip)
+          WORKER_IPS=$(cat /tmp/worker_public_ips | tr ',' '\n')
+
+          # Copy to master
+          echo "Copying K8s files to master..."
+          scp -o StrictHostKeyChecking=no /tmp/k8s-offline/kubernetes-release.key ubuntu@$MASTER_IP:/tmp/
+          scp -o StrictHostKeyChecking=no /tmp/k8s-offline/setup-k8s-repo.sh ubuntu@$MASTER_IP:/tmp/
+
+          # Copy to workers
+          for ip in $WORKER_IPS; do
+            if [ -n "$ip" ]; then
+              echo "Copying K8s files to worker $ip..."
+              scp -o StrictHostKeyChecking=no /tmp/k8s-offline/kubernetes-release.key ubuntu@$ip:/tmp/
+              scp -o StrictHostKeyChecking=no /tmp/k8s-offline/setup-k8s-repo.sh ubuntu@$ip:/tmp/
+            fi
+          done
+
       - name: Deploy Kubernetes Cluster
         run: |
           cd infrastructure/ansible
