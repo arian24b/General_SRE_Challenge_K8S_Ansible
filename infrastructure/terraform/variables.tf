@@ -81,3 +81,9 @@ variable "network_cidr" {
   type        = string
   default     = "10.0.0.0/16"
 }
+
+variable "security_group_id" {
+  description = "Security group ID to attach to all abrak instances"
+  type        = string
+  default     = "de8d14a9-21bf-48ba-a5ee-62d40256e29a"
+}

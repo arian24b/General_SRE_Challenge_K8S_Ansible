@@ -43,14 +43,15 @@ module "storage" {
 }
 
 module "compute" {
-  source         = "./modules/compute"
-  region         = var.region
-  os_image       = var.os_image
-  flavor         = var.flavor
-  disk_size      = var.disk_size
-  worker_count   = var.worker_count
-  ssh_key_name   = var.ssh_key_name
-  ssh_public_key = var.ssh_public_key
-  volume_ids     = [module.storage.etcd_volume_id, module.storage.registry_volume_id, module.storage.logs_volume_id]
-  network_id     = module.networking.network_id
+  source            = "./modules/compute"
+  region            = var.region
+  os_image          = var.os_image
+  flavor            = var.flavor
+  disk_size         = var.disk_size
+  worker_count      = var.worker_count
+  ssh_key_name      = var.ssh_key_name
+  ssh_public_key    = var.ssh_public_key
+  security_group_id = var.security_group_id
+  volume_ids        = [module.storage.etcd_volume_id, module.storage.registry_volume_id, module.storage.logs_volume_id]
+  network_id        = module.networking.network_id
 }

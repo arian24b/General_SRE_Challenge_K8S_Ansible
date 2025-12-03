@@ -48,3 +48,9 @@ variable "ssh_public_key" {
   type        = string
   default     = ""
 }
+
+variable "security_group_id" {
+  description = "Security group ID to attach to all abrak instances"
+  type        = string
+  default     = ""
+}

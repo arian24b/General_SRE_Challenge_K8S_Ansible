@@ -49,7 +49,7 @@ resource "arvan_abrak" "k8s_master" {
   init_script  = local.cloud_init_script
   enable_ipv4  = true
   enable_ipv6  = true
-  security_groups = []
+  security_groups = [var.security_group_id]
   networks = [{
     network_id = var.network_id
   }]
@@ -81,7 +81,7 @@ resource "arvan_abrak" "k8s_worker" {
   init_script  = local.cloud_init_script
   enable_ipv4  = true
   enable_ipv6  = true
-  security_groups = []
+  security_groups = [var.security_group_id]
   networks = [{
     network_id = var.network_id
   }]
