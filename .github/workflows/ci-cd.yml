@@ -353,6 +353,41 @@ jobs:
             fi
           done
 
+      - name: Download Kubernetes binaries on runner
+        run: |
+          # Download binaries on GitHub Actions runner (not blocked)
+          K8S_VERSION=$(curl -L -s https://dl.k8s.io/release/stable.txt)
+          echo "Downloading Kubernetes $K8S_VERSION binaries..."
+
+          mkdir -p /tmp/k8s-binaries
+          curl -Lo /tmp/k8s-binaries/kubectl "https://dl.k8s.io/release/${K8S_VERSION}/bin/linux/amd64/kubectl"
+          curl -Lo /tmp/k8s-binaries/kubeadm "https://dl.k8s.io/release/${K8S_VERSION}/bin/linux/amd64/kubeadm"
+          curl -Lo /tmp/k8s-binaries/kubelet "https://dl.k8s.io/release/${K8S_VERSION}/bin/linux/amd64/kubelet"
+
+          chmod +x /tmp/k8s-binaries/*
+          ls -la /tmp/k8s-binaries/
+
+          # Also download systemd service files
+          curl -Lo /tmp/k8s-binaries/kubelet.service "https://raw.githubusercontent.com/kubernetes/release/v0.16.2/cmd/krel/templates/latest/kubelet/kubelet.service"
+          curl -Lo /tmp/k8s-binaries/10-kubeadm.conf "https://raw.githubusercontent.com/kubernetes/release/v0.16.2/cmd/krel/templates/latest/kubeadm/10-kubeadm.conf"
+
+      - name: Copy Kubernetes binaries to all servers
+        run: |
+          MASTER_IP=$(cat /tmp/master_public_ip)
+          WORKER_IPS=$(cat /tmp/worker_public_ips | tr ',' '\n')
+
+          # Copy to master
+          echo "Copying binaries to master ($MASTER_IP)..."
+          scp -o StrictHostKeyChecking=no /tmp/k8s-binaries/* ubuntu@$MASTER_IP:/tmp/
+
+          # Copy to workers
+          for ip in $WORKER_IPS; do
+            if [ -n "$ip" ]; then
+              echo "Copying binaries to worker ($ip)..."
+              scp -o StrictHostKeyChecking=no /tmp/k8s-binaries/* ubuntu@$ip:/tmp/
+            fi
+          done
+
       - name: Deploy Kubernetes Cluster
         run: |
           cd infrastructure/ansible
