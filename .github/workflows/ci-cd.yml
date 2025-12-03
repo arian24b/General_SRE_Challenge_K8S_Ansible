@@ -153,8 +153,6 @@ jobs:
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: "1.14.0"
 
       - name: Setup Ansible
         run: pip install ansible
@@ -202,6 +200,9 @@ jobs:
       - name: Get Public IPs from ArvanCloud API
         env:
           ARVAN_API_KEY: ${{ secrets.ARVAN_API_KEY }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.ARVAN_S3_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.ARVAN_S3_SECRET_KEY }}
+          AWS_EC2_METADATA_DISABLED: "true"
         run: |
           cd infrastructure/terraform
 
