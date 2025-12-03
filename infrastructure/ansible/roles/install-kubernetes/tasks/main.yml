@@ -18,45 +18,19 @@
     state: directory
     mode: "0755"
 
-- name: Check if Kubernetes GPG key was pre-copied
-  stat:
-    path: /tmp/kubernetes-release.key
-  register: precopied_key
-
-- name: Use pre-copied Kubernetes GPG key (offline install)
-  shell: gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg < /tmp/kubernetes-release.key
+- name: Add Kubernetes GPG key
+  shell: curl -fsSL https://pkgs.k8s.io/core/stable/v1.32/deb/Release.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
   args:
     creates: /etc/apt/keyrings/kubernetes-apt-keyring.gpg
-  when: precopied_key.stat.exists
-
-- name: Download Kubernetes GPG key (online install)
-  shell: |
-    for i in 1 2 3 4 5; do
-      curl -fsSL --retry 3 --retry-delay 5 https://pkgs.k8s.io/core:/stable:/v1.32/deb/Release.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg && break
-      echo "Attempt $i failed, retrying in 10 seconds..."
-      sleep 10
-    done
-  args:
-    creates: /etc/apt/keyrings/kubernetes-apt-keyring.gpg
-  when: not precopied_key.stat.exists
-  register: gpg_result
-  retries: 3
-  delay: 30
-  until: gpg_result.rc == 0
 
 - name: Add Kubernetes repository
-  copy:
-    content: "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.32/deb/ /"
-    dest: /etc/apt/sources.list.d/kubernetes.list
-    mode: "0644"
+  shell: echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core/stable/v1.32/deb/ /' | tee /etc/apt/sources.list.d/kubernetes.list
+  args:
+    creates: /etc/apt/sources.list.d/kubernetes.list
 
 - name: Update apt cache after adding repo
   apt:
     update_cache: yes
-  retries: 3
-  delay: 30
-  register: apt_update
-  until: apt_update is success
 
 - name: Install kubelet, kubeadm, kubectl
   apt:
@@ -65,10 +39,6 @@
       - kubeadm
       - kubectl
     state: present
-  retries: 3
-  delay: 30
-  register: k8s_install
-  until: k8s_install is success
 
 - name: Hold Kubernetes packages
   dpkg_selections:
@@ -83,9 +53,3 @@
   systemd:
     name: kubelet
     enabled: yes
-
-- name: Clean up pre-copied key file
-  file:
-    path: /tmp/kubernetes-release.key
-    state: absent
-  when: precopied_key.stat.exists
