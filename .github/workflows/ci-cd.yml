@@ -317,11 +317,12 @@ jobs:
           cd infrastructure/ansible
 
           # Generate inventory file with ubuntu user (SSH key configured via cloud-init)
-          echo "[k8s_master]" > inventory.ini
+          # Use 'masters' and 'workers' group names to match playbook expectations
+          echo "[masters]" > inventory.ini
           echo "master ansible_host=${MASTER_IP} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/id_ed25519 ansible_become=yes ansible_become_method=sudo" >> inventory.ini
 
           echo "" >> inventory.ini
-          echo "[k8s_workers]" >> inventory.ini
+          echo "[workers]" >> inventory.ini
 
           # Add worker entries
           IFS=',' read -ra WORKER_ARRAY <<< "$WORKER_IPS"
@@ -331,8 +332,8 @@ jobs:
 
           echo "" >> inventory.ini
           echo "[k8s:children]" >> inventory.ini
-          echo "k8s_master" >> inventory.ini
-          echo "k8s_workers" >> inventory.ini
+          echo "masters" >> inventory.ini
+          echo "workers" >> inventory.ini
 
           echo "=== Generated inventory.ini ==="
           cat inventory.ini
