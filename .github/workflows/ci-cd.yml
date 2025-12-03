@@ -265,153 +265,6 @@ jobs:
           echo "Master: $MASTER_PUBLIC_IP"
           echo "Workers: $WORKER_PUBLIC_IPS"
 
-      - name: Create SSH setup script
-        run: |
-          cat > /tmp/setup_ssh.sh << 'SCRIPT_EOF'
-          #!/bin/bash
-          set -e
-
-          IP=$1
-          OLD_PASSWORD=$2
-          NEW_PASSWORD=$3
-          SSH_PUBLIC_KEY=$4
-          NAME=$5
-
-          echo "Setting up $NAME ($IP)..."
-
-          # Wait for SSH port to be available
-          for i in {1..30}; do
-            if nc -z -w5 $IP 22 2>/dev/null; then
-              echo "SSH port is open on $NAME"
-              break
-            fi
-            echo "Attempt $i/30: Waiting for SSH port on $NAME..."
-            sleep 10
-          done
-
-          # Create expect script for password change and SSH key injection
-          cat > /tmp/expect_script_$$.exp << EXPECT_SCRIPT
-          #!/usr/bin/expect -f
-          set timeout 120
-          set ip [lindex \$argv 0]
-          set old_pass [lindex \$argv 1]
-          set new_pass [lindex \$argv 2]
-          set ssh_key [lindex \$argv 3]
-
-          # First connection - handle password change
-          spawn ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ubuntu@\$ip
-
-          expect {
-              -re "password:" {
-                  send "\$old_pass\r"
-                  exp_continue
-              }
-              -re "Current password:" {
-                  send "\$old_pass\r"
-                  exp_continue
-              }
-              -re "New password:" {
-                  send "\$new_pass\r"
-                  exp_continue
-              }
-              -re "Retype new password:" {
-                  send "\$new_pass\r"
-                  exp_continue
-              }
-              -re "passwd: password updated successfully" {
-                  puts "Password changed successfully"
-                  exp_continue
-              }
-              -re "Connection.*closed" {
-                  puts "Connection closed after password change"
-              }
-              -re "\\\$|#" {
-                  send "exit\r"
-                  expect eof
-              }
-              timeout {
-                  puts "Timeout on first connection"
-                  exit 1
-              }
-              eof {
-                  puts "Connection closed"
-              }
-          }
-
-          sleep 3
-
-          # Second connection - inject SSH key
-          spawn ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ubuntu@\$ip
-
-          expect {
-              -re "password:" {
-                  send "\$new_pass\r"
-                  exp_continue
-              }
-              -re "\\\$|#" {
-                  send "mkdir -p ~/.ssh && chmod 700 ~/.ssh\r"
-                  expect -re "\\\$|#"
-                  send "echo '\$ssh_key' >> ~/.ssh/authorized_keys\r"
-                  expect -re "\\\$|#"
-                  send "chmod 600 ~/.ssh/authorized_keys\r"
-                  expect -re "\\\$|#"
-                  send "sudo mkdir -p /root/.ssh && sudo chmod 700 /root/.ssh\r"
-                  expect -re "\\\$|#"
-                  send "echo '\$ssh_key' | sudo tee -a /root/.ssh/authorized_keys\r"
-                  expect -re "\\\$|#"
-                  send "sudo chmod 600 /root/.ssh/authorized_keys\r"
-                  expect -re "\\\$|#"
-                  send "echo 'SSH key injected successfully'\r"
-                  expect -re "\\\$|#"
-                  send "exit\r"
-                  expect eof
-              }
-              timeout {
-                  puts "Timeout on second connection"
-                  exit 1
-              }
-          }
-
-          puts "Setup complete"
-          EXPECT_SCRIPT
-
-          chmod +x /tmp/expect_script_$$.exp
-          /tmp/expect_script_$$.exp "$IP" "$OLD_PASSWORD" "$NEW_PASSWORD" "$SSH_PUBLIC_KEY"
-          rm -f /tmp/expect_script_$$.exp
-
-          echo "Setup complete for $NAME"
-          SCRIPT_EOF
-          chmod +x /tmp/setup_ssh.sh
-
-      - name: Install sshpass and inject SSH keys
-        run: |
-          # Install sshpass and expect for password-based SSH and password change
-          sudo apt-get update && sudo apt-get install -y sshpass expect netcat-openbsd
-
-          # Read IPs and passwords
-          MASTER_IP=$(cat /tmp/master_public_ip)
-          MASTER_PASSWORD=$(cat /tmp/master_password)
-          WORKER_IPS=$(cat /tmp/worker_public_ips | tr ',' '\n')
-          WORKER_PASSWORDS=$(cat /tmp/worker_passwords | tr ',' '\n')
-
-          SSH_PUBLIC_KEY=$(cat ~/.ssh/id_ed25519.pub)
-          NEW_PASSWORD="K8s@Secure2025!"
-
-          # Setup master
-          /tmp/setup_ssh.sh "$MASTER_IP" "$MASTER_PASSWORD" "$NEW_PASSWORD" "$SSH_PUBLIC_KEY" "Master node"
-
-          # Setup workers
-          readarray -t WORKER_IP_ARRAY <<< "$WORKER_IPS"
-          readarray -t WORKER_PASS_ARRAY <<< "$WORKER_PASSWORDS"
-
-          for i in "${!WORKER_IP_ARRAY[@]}"; do
-            if [ -n "${WORKER_IP_ARRAY[$i]}" ]; then
-              /tmp/setup_ssh.sh "${WORKER_IP_ARRAY[$i]}" "${WORKER_PASS_ARRAY[$i]}" "$NEW_PASSWORD" "$SSH_PUBLIC_KEY" "Worker $i"
-            fi
-          done
-
-          echo "SSH keys injected to all servers"
-
       - name: Wait for servers to be reachable
         run: |
           # Read IPs from files
@@ -421,20 +274,14 @@ jobs:
           echo "Master public IP: $MASTER_IP"
           echo "Worker public IPs: $WORKER_IPS"
 
-          # Function to wait for a server to be reachable via SSH (try both ubuntu and root)
+          # Function to wait for a server to be reachable via SSH
           wait_for_ssh() {
             local ip=$1
             local name=$2
             echo "Waiting for $name ($ip) to be reachable via SSH..."
             for i in {1..60}; do
-              # Try root first (preferred for Ansible)
               if ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o BatchMode=yes root@$ip "echo 'SSH connection successful'" 2>/dev/null; then
                 echo "$name is reachable via SSH as root!"
-                return 0
-              fi
-              # Try ubuntu user as fallback
-              if ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o BatchMode=yes ubuntu@$ip "echo 'SSH connection successful'" 2>/dev/null; then
-                echo "$name is reachable via SSH as ubuntu!"
                 return 0
               fi
               echo "Attempt $i/60: $name not reachable yet, waiting..."
@@ -469,20 +316,9 @@ jobs:
 
           cd infrastructure/ansible
 
-          # Check if root SSH works, otherwise use ubuntu with become
-          if ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o BatchMode=yes root@$MASTER_IP "echo test" 2>/dev/null; then
-            ANSIBLE_USER="root"
-            BECOME_LINE=""
-          else
-            ANSIBLE_USER="ubuntu"
-            BECOME_LINE="ansible_become=yes ansible_become_method=sudo"
-          fi
-
-          echo "Using Ansible user: $ANSIBLE_USER"
-
-          # Generate inventory file with proper formatting
+          # Generate inventory file with root user (SSH key configured via cloud-init)
           echo "[k8s_master]" > inventory.ini
-          echo "master ansible_host=${MASTER_IP} ansible_user=${ANSIBLE_USER} ansible_ssh_private_key_file=~/.ssh/id_ed25519 ${BECOME_LINE}" >> inventory.ini
+          echo "master ansible_host=${MASTER_IP} ansible_user=root ansible_ssh_private_key_file=~/.ssh/id_ed25519" >> inventory.ini
 
           echo "" >> inventory.ini
           echo "[k8s_workers]" >> inventory.ini
@@ -490,7 +326,7 @@ jobs:
           # Add worker entries
           IFS=',' read -ra WORKER_ARRAY <<< "$WORKER_IPS"
           for i in "${!WORKER_ARRAY[@]}"; do
-            echo "worker${i} ansible_host=${WORKER_ARRAY[$i]} ansible_user=${ANSIBLE_USER} ansible_ssh_private_key_file=~/.ssh/id_ed25519 ${BECOME_LINE}" >> inventory.ini
+            echo "worker${i} ansible_host=${WORKER_ARRAY[$i]} ansible_user=root ansible_ssh_private_key_file=~/.ssh/id_ed25519" >> inventory.ini
           done
 
           echo "" >> inventory.ini
@@ -526,13 +362,7 @@ jobs:
         run: |
           mkdir -p ~/.kube
           MASTER_IP=$(cat /tmp/master_public_ip)
-          # Try root first, then ubuntu
-          if scp -o StrictHostKeyChecking=no -o BatchMode=yes root@$MASTER_IP:~/.kube/config ~/.kube/config 2>/dev/null; then
-            echo "Copied kubeconfig as root"
-          else
-            scp -o StrictHostKeyChecking=no ubuntu@$MASTER_IP:~/.kube/config ~/.kube/config
-            echo "Copied kubeconfig as ubuntu"
-          fi
+          scp -o StrictHostKeyChecking=no root@$MASTER_IP:~/.kube/config ~/.kube/config
           sed -i "s/127.0.0.1/$MASTER_IP/g" ~/.kube/config
           kubectl get nodes
 

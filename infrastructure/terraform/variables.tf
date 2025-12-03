@@ -25,7 +25,7 @@ variable "ssh_public_key_path" {
 variable "ssh_key_name" {
   description = "Name of the SSH key pair in ArvanCloud"
   type        = string
-  default     = ""
+  default     = "k8s-cluster"
 }
 
 variable "ssh_public_key" {
