@@ -280,8 +280,8 @@ jobs:
             local name=$2
             echo "Waiting for $name ($ip) to be reachable via SSH..."
             for i in {1..60}; do
-              if ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o BatchMode=yes root@$ip "echo 'SSH connection successful'" 2>/dev/null; then
-                echo "$name is reachable via SSH as root!"
+              if ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o BatchMode=yes ubuntu@$ip "echo 'SSH connection successful'" 2>/dev/null; then
+                echo "$name is reachable via SSH!"
                 return 0
               fi
               echo "Attempt $i/60: $name not reachable yet, waiting..."
@@ -316,9 +316,9 @@ jobs:
 
           cd infrastructure/ansible
 
-          # Generate inventory file with root user (SSH key configured via cloud-init)
+          # Generate inventory file with ubuntu user (SSH key configured via cloud-init)
           echo "[k8s_master]" > inventory.ini
-          echo "master ansible_host=${MASTER_IP} ansible_user=root ansible_ssh_private_key_file=~/.ssh/id_ed25519" >> inventory.ini
+          echo "master ansible_host=${MASTER_IP} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/id_ed25519 ansible_become=yes ansible_become_method=sudo" >> inventory.ini
 
           echo "" >> inventory.ini
           echo "[k8s_workers]" >> inventory.ini
@@ -326,7 +326,7 @@ jobs:
           # Add worker entries
           IFS=',' read -ra WORKER_ARRAY <<< "$WORKER_IPS"
           for i in "${!WORKER_ARRAY[@]}"; do
-            echo "worker${i} ansible_host=${WORKER_ARRAY[$i]} ansible_user=root ansible_ssh_private_key_file=~/.ssh/id_ed25519" >> inventory.ini
+            echo "worker${i} ansible_host=${WORKER_ARRAY[$i]} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/id_ed25519 ansible_become=yes ansible_become_method=sudo" >> inventory.ini
           done
 
           echo "" >> inventory.ini
@@ -362,7 +362,8 @@ jobs:
         run: |
           mkdir -p ~/.kube
           MASTER_IP=$(cat /tmp/master_public_ip)
-          scp -o StrictHostKeyChecking=no root@$MASTER_IP:~/.kube/config ~/.kube/config
+          # Copy kubeconfig from master (created by kubeadm for root, need sudo to read)
+          ssh -o StrictHostKeyChecking=no ubuntu@$MASTER_IP "sudo cat /root/.kube/config" > ~/.kube/config
           sed -i "s/127.0.0.1/$MASTER_IP/g" ~/.kube/config
           kubectl get nodes
 

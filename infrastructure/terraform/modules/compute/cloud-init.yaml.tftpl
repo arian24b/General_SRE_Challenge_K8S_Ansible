@@ -1,8 +1,5 @@
 #cloud-config
 users:
-  - name: root
-    ssh_authorized_keys:
-      - ${ssh_public_key}
   - name: ubuntu
     sudo: ALL=(ALL) NOPASSWD:ALL
     shell: /bin/bash
@@ -10,16 +7,12 @@ users:
       - ${ssh_public_key}
 
 runcmd:
-  # Clear and set SSH authorized_keys for root
-  - echo '${ssh_public_key}' > /root/.ssh/authorized_keys
-  - chmod 600 /root/.ssh/authorized_keys
-  - chown root:root /root/.ssh/authorized_keys
-  # Clear and set SSH authorized_keys for ubuntu
+  # Clear and set SSH authorized_keys for ubuntu user
   - mkdir -p /home/ubuntu/.ssh
+  - chmod 700 /home/ubuntu/.ssh
   - echo '${ssh_public_key}' > /home/ubuntu/.ssh/authorized_keys
   - chmod 600 /home/ubuntu/.ssh/authorized_keys
-  - chown ubuntu:ubuntu /home/ubuntu/.ssh/authorized_keys
-  # Disable password authentication
+  - chown -R ubuntu:ubuntu /home/ubuntu/.ssh
+  # Disable password authentication for security
   - sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
-  - sed -i 's/^#*PermitRootLogin.*/PermitRootLogin prohibit-password/' /etc/ssh/sshd_config
   - systemctl restart sshd
