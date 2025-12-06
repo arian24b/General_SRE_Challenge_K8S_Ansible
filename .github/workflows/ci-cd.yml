@@ -426,26 +426,34 @@ jobs:
           MASTER_IP=$(cat /tmp/master_public_ip)
 
           echo "Copying images archive to master ($MASTER_IP)..."
-          scp -o StrictHostKeyChecking=no /tmp/k8s-images.tar.gz ubuntu@$MASTER_IP:/tmp/
+          scp -o StrictHostKeyChecking=no -o ServerAliveInterval=60 -o ServerAliveCountMax=10 \
+            /tmp/k8s-images.tar.gz ubuntu@$MASTER_IP:/tmp/
 
-          echo "Extracting and loading images on master..."
-          ssh -o StrictHostKeyChecking=no ubuntu@$MASTER_IP << 'EOF'
+          echo "Extracting and loading images on master (this may take a few minutes)..."
+          ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=60 -o ServerAliveCountMax=10 \
+            ubuntu@$MASTER_IP << 'EOF'
+            set -e
             cd /tmp
+
+            echo "Extracting images..."
             tar -xzf k8s-images.tar.gz
 
             echo "Loading images into containerd..."
             for tar_file in *.tar; do
               if [ "$tar_file" != "k8s-images.tar.gz" ]; then
                 echo "Loading $tar_file..."
-                sudo ctr -n k8s.io images import "$tar_file"
+                sudo ctr -n k8s.io images import "$tar_file" || echo "Warning: Failed to import $tar_file"
               fi
             done
 
             echo "Verifying loaded images..."
-            sudo ctr -n k8s.io images list
+            sudo ctr -n k8s.io images list | grep -E 'registry.k8s.io|REF'
 
             # Cleanup
+            echo "Cleaning up temporary files..."
             rm -f *.tar k8s-images.tar.gz
+
+            echo "Image loading complete!"
           EOF
 
       - name: Deploy Kubernetes Cluster
