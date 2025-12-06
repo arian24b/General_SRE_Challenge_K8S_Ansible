@@ -382,19 +382,14 @@ jobs:
 
           mkdir -p /tmp/k8s-images
 
-          # List of required images for kubeadm
-          IMAGES=(
-            "registry.k8s.io/kube-apiserver:${K8S_VERSION}"
-            "registry.k8s.io/kube-controller-manager:${K8S_VERSION}"
-            "registry.k8s.io/kube-scheduler:${K8S_VERSION}"
-            "registry.k8s.io/kube-proxy:${K8S_VERSION}"
-            "registry.k8s.io/coredns/coredns:v1.12.0"
-            "registry.k8s.io/pause:3.10"
-            "registry.k8s.io/etcd:3.5.17-0"
-          )
+          # Use kubeadm to get the exact list of images needed
+          /tmp/k8s-binaries/kubeadm config images list --kubernetes-version=$K8S_VERSION > /tmp/image-list.txt
+
+          echo "Required images for Kubernetes $K8S_VERSION:"
+          cat /tmp/image-list.txt
 
           # Pull and save each image
-          for image in "${IMAGES[@]}"; do
+          while IFS= read -r image; do
             echo "Pulling $image..."
             docker pull "$image"
 
@@ -402,7 +397,7 @@ jobs:
             filename=$(echo "$image" | sed 's/[\/:]/_/g')
             echo "Saving to /tmp/k8s-images/${filename}.tar"
             docker save "$image" -o "/tmp/k8s-images/${filename}.tar"
-          done
+          done < /tmp/image-list.txt
 
           # Create a compressed archive of all images
           cd /tmp/k8s-images
