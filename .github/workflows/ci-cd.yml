@@ -392,15 +392,46 @@ jobs:
       - name: Deploy Kubernetes Cluster
         run: |
           cd infrastructure/ansible
-          ansible-playbook -i inventory.ini setup-cluster.yml
+          ansible-playbook -i inventory.ini setup-cluster.yml -v
+
+      - name: Verify cluster initialization
+        run: |
+          MASTER_IP=$(cat /tmp/master_public_ip)
+          echo "Verifying cluster initialization on master ($MASTER_IP)..."
+
+          # Check if kubeconfig exists
+          if ! ssh -o StrictHostKeyChecking=no ubuntu@$MASTER_IP "sudo test -f /root/.kube/config"; then
+            echo "ERROR: Kubeconfig not found at /root/.kube/config"
+            echo "Checking for admin.conf..."
+            if ssh -o StrictHostKeyChecking=no ubuntu@$MASTER_IP "sudo test -f /etc/kubernetes/admin.conf"; then
+              echo "Found /etc/kubernetes/admin.conf, copying to /root/.kube/config"
+              ssh -o StrictHostKeyChecking=no ubuntu@$MASTER_IP "sudo mkdir -p /root/.kube && sudo cp /etc/kubernetes/admin.conf /root/.kube/config"
+            else
+              echo "ERROR: Neither /root/.kube/config nor /etc/kubernetes/admin.conf found"
+              echo "Cluster may not have been initialized properly"
+              exit 1
+            fi
+          fi
+
+          # Verify kubeconfig is readable
+          ssh -o StrictHostKeyChecking=no ubuntu@$MASTER_IP "sudo cat /root/.kube/config" > /dev/null
+          echo "Kubeconfig verified successfully"
 
       - name: Setup kubectl
         run: |
           mkdir -p ~/.kube
           MASTER_IP=$(cat /tmp/master_public_ip)
-          # Copy kubeconfig from master (created by kubeadm for root, need sudo to read)
+
+          # Copy kubeconfig from master
+          echo "Copying kubeconfig from master..."
           ssh -o StrictHostKeyChecking=no ubuntu@$MASTER_IP "sudo cat /root/.kube/config" > ~/.kube/config
+
+          # Replace localhost with master IP
           sed -i "s/127.0.0.1/$MASTER_IP/g" ~/.kube/config
+
+          # Verify kubectl can connect
+          echo "Testing kubectl connection..."
+          kubectl version --short || true
           kubectl get nodes
 
       - name: Deploy Monitoring Stack
