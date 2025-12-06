@@ -13,7 +13,7 @@ variable "region" {
 variable "os_image" {
   description = "OS image name (from available distributions)"
   type        = string
-  default     = "22.04" # Available: 24.04, 22.04, 20.04, etc.
+  default     = "22.04"
 }
 
 variable "ssh_public_key_path" {
@@ -43,7 +43,7 @@ variable "worker_count" {
 variable "flavor" {
   description = "Instance flavor name (from available plans)"
   type        = string
-  default     = "eco-small1" # Available: eco-small1, g5-small1, etc.
+  default     = "eco-small1"
 }
 
 variable "disk_size" {

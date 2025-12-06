@@ -1,6 +1,8 @@
 FROM python:3.14-bookworm AS builder
 
-ENV PATH="/root/.local/bin:${PATH}" PYTHONUNBUFFERED=1 UV_COMPILE_BYTECODE=1
+ENV PATH="/root/.local/bin:${PATH}" \
+    PYTHONUNBUFFERED=1 \
+    UV_COMPILE_BYTECODE=1
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
@@ -8,7 +10,8 @@ WORKDIR /app
 
 COPY ./pyproject.toml .
 
-RUN uv lock; uv sync --frozen --no-cache --no-install-project --no-dev
+RUN uv lock && \
+    uv sync --frozen --no-cache --no-install-project --no-dev
 
 FROM python:3.14-slim-bookworm AS production
 
@@ -25,8 +28,9 @@ ENV PATH="/app/.venv/bin:$PATH" \
 
 EXPOSE 8000
 
-RUN groupadd -r appuser && useradd -r -g appuser appuser \
-    && chown -R appuser:appuser /app
+RUN groupadd -r appuser && \
+    useradd -r -g appuser appuser && \
+    chown -R appuser:appuser /app
 
 USER appuser
 

@@ -1,7 +1,4 @@
 ---
-# Master playbook for complete cluster setup
-# This orchestrates the entire deployment process
-
 - name: Install container runtime on all nodes
   import_playbook: install-containerd.yml
 

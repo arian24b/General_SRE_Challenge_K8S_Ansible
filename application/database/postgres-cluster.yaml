@@ -6,6 +6,7 @@ metadata:
 spec:
   image: registry.developers.crunchydata.com/crunchydata/crunchy-postgres:ubi9-17.6-2542
   postgresVersion: 17
+
   instances:
     - name: instance1
       replicas: 3
@@ -26,6 +27,7 @@ spec:
                     postgres-operator.crunchydata.com/cluster: postgres-cluster
                     postgres-operator.crunchydata.com/instance-set: instance1
                 topologyKey: kubernetes.io/hostname
+
   backups:
     pgbackrest:
       image: registry.developers.crunchydata.com/crunchydata/crunchy-pgbackrest:ubi9-2.56.0-2542
