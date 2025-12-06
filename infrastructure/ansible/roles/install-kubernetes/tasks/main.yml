@@ -2,6 +2,33 @@
 # Kubernetes binaries are pre-copied to /tmp by CI/CD pipeline
 # because dl.k8s.io is blocked in Iran
 
+- name: Enable kernel modules
+  modprobe:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - overlay
+    - br_netfilter
+
+- name: Ensure kernel modules load on boot
+  copy:
+    dest: /etc/modules-load.d/k8s.conf
+    content: |
+      overlay
+      br_netfilter
+
+- name: Set sysctl params for Kubernetes
+  sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    sysctl_set: yes
+    state: present
+    reload: yes
+  loop:
+    - { key: "net.bridge.bridge-nf-call-iptables", value: "1" }
+    - { key: "net.bridge.bridge-nf-call-ip6tables", value: "1" }
+    - { key: "net.ipv4.ip_forward", value: "1" }
+
 - name: Update apt cache
   apt:
     update_cache: yes
