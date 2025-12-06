@@ -372,6 +372,43 @@ jobs:
           curl -Lo /tmp/k8s-binaries/kubelet.service "https://raw.githubusercontent.com/kubernetes/release/v0.16.2/cmd/krel/templates/latest/kubelet/kubelet.service"
           curl -Lo /tmp/k8s-binaries/10-kubeadm.conf "https://raw.githubusercontent.com/kubernetes/release/v0.16.2/cmd/krel/templates/latest/kubeadm/10-kubeadm.conf"
 
+          # Save K8S_VERSION for next steps
+          echo "$K8S_VERSION" > /tmp/k8s-version.txt
+
+      - name: Pull and save Kubernetes container images
+        run: |
+          K8S_VERSION=$(cat /tmp/k8s-version.txt)
+          echo "Pulling Kubernetes $K8S_VERSION container images..."
+
+          mkdir -p /tmp/k8s-images
+
+          # List of required images for kubeadm
+          IMAGES=(
+            "registry.k8s.io/kube-apiserver:${K8S_VERSION}"
+            "registry.k8s.io/kube-controller-manager:${K8S_VERSION}"
+            "registry.k8s.io/kube-scheduler:${K8S_VERSION}"
+            "registry.k8s.io/kube-proxy:${K8S_VERSION}"
+            "registry.k8s.io/coredns/coredns:v1.12.0"
+            "registry.k8s.io/pause:3.10"
+            "registry.k8s.io/etcd:3.5.17-0"
+          )
+
+          # Pull and save each image
+          for image in "${IMAGES[@]}"; do
+            echo "Pulling $image..."
+            docker pull "$image"
+
+            # Create a safe filename
+            filename=$(echo "$image" | sed 's/[\/:]/_/g')
+            echo "Saving to /tmp/k8s-images/${filename}.tar"
+            docker save "$image" -o "/tmp/k8s-images/${filename}.tar"
+          done
+
+          # Create a compressed archive of all images
+          cd /tmp/k8s-images
+          tar -czf /tmp/k8s-images.tar.gz *.tar
+          ls -lh /tmp/k8s-images.tar.gz
+
       - name: Copy Kubernetes binaries to all servers
         run: |
           MASTER_IP=$(cat /tmp/master_public_ip)
@@ -388,6 +425,33 @@ jobs:
               scp -o StrictHostKeyChecking=no /tmp/k8s-binaries/* ubuntu@$ip:/tmp/
             fi
           done
+
+      - name: Copy and load Kubernetes images on master
+        run: |
+          MASTER_IP=$(cat /tmp/master_public_ip)
+
+          echo "Copying images archive to master ($MASTER_IP)..."
+          scp -o StrictHostKeyChecking=no /tmp/k8s-images.tar.gz ubuntu@$MASTER_IP:/tmp/
+
+          echo "Extracting and loading images on master..."
+          ssh -o StrictHostKeyChecking=no ubuntu@$MASTER_IP << 'EOF'
+            cd /tmp
+            tar -xzf k8s-images.tar.gz
+
+            echo "Loading images into containerd..."
+            for tar_file in *.tar; do
+              if [ "$tar_file" != "k8s-images.tar.gz" ]; then
+                echo "Loading $tar_file..."
+                sudo ctr -n k8s.io images import "$tar_file"
+              fi
+            done
+
+            echo "Verifying loaded images..."
+            sudo ctr -n k8s.io images list
+
+            # Cleanup
+            rm -f *.tar k8s-images.tar.gz
+          EOF
 
       - name: Deploy Kubernetes Cluster
         run: |
