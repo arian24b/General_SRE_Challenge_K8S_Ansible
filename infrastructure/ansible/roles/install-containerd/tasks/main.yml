@@ -14,7 +14,7 @@
   file:
     path: /etc/apt/keyrings
     state: directory
-    mode: '0755'
+    mode: "0755"
 
 - name: Add Docker GPG key
   shell: |
@@ -43,8 +43,23 @@
   args:
     creates: /etc/containerd/config.toml
 
+- name: Enable SystemdCgroup in containerd config
+  lineinfile:
+    path: /etc/containerd/config.toml
+    regexp: '^\s*SystemdCgroup\s*='
+    line: "            SystemdCgroup = true"
+    insertafter: '^\s*\[plugins\."io\.containerd\.grpc\.v1\.cri"\.containerd\.runtimes\.runc\.options\]'
+    state: present
+
+- name: Ensure CRI plugin is enabled
+  replace:
+    path: /etc/containerd/config.toml
+    regexp: 'disabled_plugins = \["cri"\]'
+    replace: "disabled_plugins = []"
+
 - name: Restart and enable containerd
   systemd:
     name: containerd
     state: restarted
     enabled: yes
+    daemon_reload: yes
