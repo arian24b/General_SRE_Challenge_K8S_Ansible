@@ -59,8 +59,6 @@ jobs:
 
       - name: Setup Helm
         uses: azure/setup-helm@v4
-        with:
-          version: "v3.14.0"
 
       - name: Lint Helm charts
         run: |
@@ -163,7 +161,6 @@ jobs:
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H github.com >> ~/.ssh/known_hosts || true
-          # Generate public key from private key for cloud-init injection
           ssh-keygen -y -f ~/.ssh/id_ed25519 > ~/.ssh/id_ed25519.pub
 
       - name: Terraform Init
@@ -206,7 +203,6 @@ jobs:
         run: |
           cd infrastructure/terraform
 
-          # Get server IDs from terraform
           MASTER_ID=$(terraform output -raw master_id)
           WORKER_IDS=$(terraform output -json worker_ids | jq -r '.[]')
           REGION=$(terraform output -raw region 2>/dev/null || echo "ir-thr-c2")
@@ -214,29 +210,24 @@ jobs:
           echo "Master ID: $MASTER_ID"
           echo "Worker IDs: $WORKER_IDS"
 
-          # Function to get public IP from ArvanCloud API
           get_public_ip() {
             local server_id=$1
             local response=$(curl -s -H "Authorization: $ARVAN_API_KEY" \
               "https://napi.arvancloud.ir/ecc/v1/regions/${REGION}/servers/${server_id}")
 
-            # Extract public IPv4 address
             local public_ip=$(echo "$response" | jq -r '.data.addresses | to_entries[] | .value[] | select(.version == "4" and .is_public == true) | .addr' | head -1)
 
             if [ -z "$public_ip" ] || [ "$public_ip" == "null" ]; then
-              # Fallback: try to get any public address
               public_ip=$(echo "$response" | jq -r '.data.addresses | to_entries[] | .value[] | select(.is_public == true) | .addr' | head -1)
             fi
 
             echo "$public_ip"
           }
 
-          # Get master public IP and password
           MASTER_PUBLIC_IP=$(get_public_ip "$MASTER_ID")
           MASTER_PASSWORD=$(terraform state show module.compute.arvan_abrak.k8s_master | grep 'password' | awk -F'"' '{print $2}')
           echo "Master Public IP: $MASTER_PUBLIC_IP"
 
-          # Get worker public IPs and passwords
           WORKER_PUBLIC_IPS=""
           WORKER_PASSWORDS=""
           worker_index=0
@@ -255,15 +246,10 @@ jobs:
             worker_index=$((worker_index + 1))
           done
 
-          # Save IPs and passwords to files for later steps
           echo "$MASTER_PUBLIC_IP" > /tmp/master_public_ip
           echo "$MASTER_PASSWORD" > /tmp/master_password
           echo "$WORKER_PUBLIC_IPS" > /tmp/worker_public_ips
           echo "$WORKER_PASSWORDS" > /tmp/worker_passwords
-
-          echo "=== Public IPs ==="
-          echo "Master: $MASTER_PUBLIC_IP"
-          echo "Workers: $WORKER_PUBLIC_IPS"
 
       - name: Wait for servers to be reachable
         run: |
@@ -271,10 +257,6 @@ jobs:
           MASTER_IP=$(cat /tmp/master_public_ip)
           WORKER_IPS=$(cat /tmp/worker_public_ips | tr ',' '\n')
 
-          echo "Master public IP: $MASTER_IP"
-          echo "Worker public IPs: $WORKER_IPS"
-
-          # Function to wait for a server to be reachable via SSH
           wait_for_ssh() {
             local ip=$1
             local name=$2
@@ -291,10 +273,8 @@ jobs:
             return 1
           }
 
-          # Wait for master node
           wait_for_ssh "$MASTER_IP" "Master node"
 
-          # Wait for each worker node
           for WORKER_IP in $WORKER_IPS; do
             if [ -n "$WORKER_IP" ]; then
               wait_for_ssh "$WORKER_IP" "Worker node"
@@ -306,25 +286,20 @@ jobs:
 
       - name: Generate Ansible Inventory
         run: |
-          # Read IPs from files
           MASTER_IP=$(cat /tmp/master_public_ip)
           WORKER_IPS=$(cat /tmp/worker_public_ips)
 
-          echo "=== Generating Ansible Inventory ==="
           echo "Master IP: $MASTER_IP"
           echo "Worker IPs: $WORKER_IPS"
 
           cd infrastructure/ansible
 
-          # Generate inventory file with ubuntu user (SSH key configured via cloud-init)
-          # Use 'masters' and 'workers' group names to match playbook expectations
           echo "[masters]" > inventory.ini
           echo "master ansible_host=${MASTER_IP} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/id_ed25519 ansible_become=yes ansible_become_method=sudo" >> inventory.ini
 
           echo "" >> inventory.ini
           echo "[workers]" >> inventory.ini
 
-          # Add worker entries
           IFS=',' read -ra WORKER_ARRAY <<< "$WORKER_IPS"
           for i in "${!WORKER_ARRAY[@]}"; do
             echo "worker${i} ansible_host=${WORKER_ARRAY[$i]} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/id_ed25519 ansible_become=yes ansible_become_method=sudo" >> inventory.ini
@@ -335,30 +310,24 @@ jobs:
           echo "masters" >> inventory.ini
           echo "workers" >> inventory.ini
 
-          echo "=== Generated inventory.ini ==="
           cat inventory.ini
 
       - name: Add hosts to known_hosts
         run: |
-          # Read IPs from files
           MASTER_IP=$(cat /tmp/master_public_ip)
           WORKER_IPS=$(cat /tmp/worker_public_ips | tr ',' '\n')
 
-          echo "Adding master ($MASTER_IP) to known_hosts"
           ssh-keyscan -H $MASTER_IP >> ~/.ssh/known_hosts 2>/dev/null || true
 
           for ip in $WORKER_IPS; do
             if [ -n "$ip" ]; then
-              echo "Adding worker ($ip) to known_hosts"
               ssh-keyscan -H $ip >> ~/.ssh/known_hosts 2>/dev/null || true
             fi
           done
 
       - name: Download Kubernetes binaries on runner
         run: |
-          # Download binaries on GitHub Actions runner (not blocked)
           K8S_VERSION=$(curl -L -s https://dl.k8s.io/release/stable.txt)
-          echo "Downloading Kubernetes $K8S_VERSION binaries..."
 
           mkdir -p /tmp/k8s-binaries
           curl -Lo /tmp/k8s-binaries/kubectl "https://dl.k8s.io/release/${K8S_VERSION}/bin/linux/amd64/kubectl"
@@ -366,57 +335,39 @@ jobs:
           curl -Lo /tmp/k8s-binaries/kubelet "https://dl.k8s.io/release/${K8S_VERSION}/bin/linux/amd64/kubelet"
 
           chmod +x /tmp/k8s-binaries/*
-          ls -la /tmp/k8s-binaries/
 
-          # Also download systemd service files
           curl -Lo /tmp/k8s-binaries/kubelet.service "https://raw.githubusercontent.com/kubernetes/release/v0.16.2/cmd/krel/templates/latest/kubelet/kubelet.service"
           curl -Lo /tmp/k8s-binaries/10-kubeadm.conf "https://raw.githubusercontent.com/kubernetes/release/v0.16.2/cmd/krel/templates/latest/kubeadm/10-kubeadm.conf"
 
-          # Save K8S_VERSION for next steps
           echo "$K8S_VERSION" > /tmp/k8s-version.txt
 
       - name: Pull and save Kubernetes container images
         run: |
           K8S_VERSION=$(cat /tmp/k8s-version.txt)
-          echo "Pulling Kubernetes $K8S_VERSION container images..."
 
           mkdir -p /tmp/k8s-images
 
-          # Use kubeadm to get the exact list of images needed
           /tmp/k8s-binaries/kubeadm config images list --kubernetes-version=$K8S_VERSION > /tmp/image-list.txt
 
-          echo "Required images for Kubernetes $K8S_VERSION:"
-          cat /tmp/image-list.txt
-
-          # Pull and save each image
           while IFS= read -r image; do
-            echo "Pulling $image..."
             docker pull "$image"
 
-            # Create a safe filename
             filename=$(echo "$image" | sed 's/[\/:]/_/g')
-            echo "Saving to /tmp/k8s-images/${filename}.tar"
             docker save "$image" -o "/tmp/k8s-images/${filename}.tar"
           done < /tmp/image-list.txt
 
-          # Create a compressed archive of all images
           cd /tmp/k8s-images
           tar -czf /tmp/k8s-images.tar.gz *.tar
-          ls -lh /tmp/k8s-images.tar.gz
 
       - name: Copy Kubernetes binaries to all servers
         run: |
           MASTER_IP=$(cat /tmp/master_public_ip)
           WORKER_IPS=$(cat /tmp/worker_public_ips | tr ',' '\n')
 
-          # Copy to master
-          echo "Copying binaries to master ($MASTER_IP)..."
           scp -o StrictHostKeyChecking=no /tmp/k8s-binaries/* ubuntu@$MASTER_IP:/tmp/
 
-          # Copy to workers
           for ip in $WORKER_IPS; do
             if [ -n "$ip" ]; then
-              echo "Copying binaries to worker ($ip)..."
               scp -o StrictHostKeyChecking=no /tmp/k8s-binaries/* ubuntu@$ip:/tmp/
             fi
           done
@@ -425,35 +376,24 @@ jobs:
         run: |
           MASTER_IP=$(cat /tmp/master_public_ip)
 
-          echo "Copying images archive to master ($MASTER_IP)..."
           scp -o StrictHostKeyChecking=no -o ServerAliveInterval=60 -o ServerAliveCountMax=10 \
             /tmp/k8s-images.tar.gz ubuntu@$MASTER_IP:/tmp/
 
-          echo "Extracting and loading images on master (this may take a few minutes)..."
           ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=60 -o ServerAliveCountMax=10 \
             ubuntu@$MASTER_IP << 'EOF'
             set -e
             cd /tmp
 
-            echo "Extracting images..."
             tar -xzf k8s-images.tar.gz
 
-            echo "Loading images into containerd..."
             for tar_file in *.tar; do
               if [ "$tar_file" != "k8s-images.tar.gz" ]; then
-                echo "Loading $tar_file..."
                 sudo ctr -n k8s.io images import "$tar_file" || echo "Warning: Failed to import $tar_file"
               fi
             done
 
-            echo "Verifying loaded images..."
             sudo ctr -n k8s.io images list | grep -E 'registry.k8s.io|REF'
-
-            # Cleanup
-            echo "Cleaning up temporary files..."
             rm -f *.tar k8s-images.tar.gz
-
-            echo "Image loading complete!"
           EOF
 
       - name: Deploy Kubernetes Cluster
@@ -464,40 +404,27 @@ jobs:
       - name: Verify cluster initialization
         run: |
           MASTER_IP=$(cat /tmp/master_public_ip)
-          echo "Verifying cluster initialization on master ($MASTER_IP)..."
 
-          # Check if kubeconfig exists
           if ! ssh -o StrictHostKeyChecking=no ubuntu@$MASTER_IP "sudo test -f /root/.kube/config"; then
-            echo "ERROR: Kubeconfig not found at /root/.kube/config"
-            echo "Checking for admin.conf..."
             if ssh -o StrictHostKeyChecking=no ubuntu@$MASTER_IP "sudo test -f /etc/kubernetes/admin.conf"; then
-              echo "Found /etc/kubernetes/admin.conf, copying to /root/.kube/config"
               ssh -o StrictHostKeyChecking=no ubuntu@$MASTER_IP "sudo mkdir -p /root/.kube && sudo cp /etc/kubernetes/admin.conf /root/.kube/config"
             else
-              echo "ERROR: Neither /root/.kube/config nor /etc/kubernetes/admin.conf found"
-              echo "Cluster may not have been initialized properly"
               exit 1
             fi
           fi
 
-          # Verify kubeconfig is readable
           ssh -o StrictHostKeyChecking=no ubuntu@$MASTER_IP "sudo cat /root/.kube/config" > /dev/null
-          echo "Kubeconfig verified successfully"
+          echo "Kubeconfig verified "
 
       - name: Setup kubectl
         run: |
           mkdir -p ~/.kube
           MASTER_IP=$(cat /tmp/master_public_ip)
 
-          # Copy kubeconfig from master
-          echo "Copying kubeconfig from master..."
           ssh -o StrictHostKeyChecking=no ubuntu@$MASTER_IP "sudo cat /root/.kube/config" > ~/.kube/config
 
-          # Replace localhost with master IP
           sed -i "s/127.0.0.1/$MASTER_IP/g" ~/.kube/config
 
-          # Verify kubectl can connect
-          echo "Testing kubectl connection..."
           kubectl version --short || true
           kubectl get nodes
 
@@ -573,6 +500,7 @@ jobs:
           fi
           kubectl run curl-test --image=curlimages/curl:latest --rm -i --restart=Never -- \
             curl -f http://$API_URL:80/health || exit 1
+
   # ============= GITOPS SYNC (Optional) =============
   sync-argocd:
     name: Sync ArgoCD Applications
